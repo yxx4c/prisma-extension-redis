@@ -1,0 +1,10 @@
+import { Operation } from '@prisma/client/runtime/library';
+import { ActionCheckParams, ActionParams, DeletePatterns } from './types';
+export declare const filterOperations: <T extends Operation[]>(...ops: T) => (excluded?: Operation[]) => T;
+export declare const unlinkPatterns: ({ patterns, redis }: DeletePatterns) => Promise<boolean>[];
+export declare const autoCacheAction: ({ cache, options: { args: xArgs, model, query }, stale, ttl, }: ActionParams) => Promise<any>;
+export declare const customCacheAction: ({ redis, options: { args: xArgs, query }, }: ActionParams) => Promise<any>;
+export declare const customUncacheAction: ({ redis, options: { args: xArgs, query }, }: ActionParams) => Promise<unknown>;
+export declare const isAutoCacheEnabled: ({ auto, options: { args: xArgs, model, operation }, }: ActionCheckParams) => boolean;
+export declare const isCustomCacheEnabled: ({ options: { args: xArgs, operation }, }: ActionCheckParams) => boolean;
+export declare const isCustomUncacheEnabled: ({ options: { args: xArgs, operation }, }: ActionCheckParams) => boolean;

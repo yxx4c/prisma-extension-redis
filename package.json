@@ -1,0 +1,128 @@
+{
+  "name": "@yxx4c/prisma-redis-extension",
+  "version": "0.0.1",
+  "description": "Extensive Prisma extension designed for efficient caching and cache invalidation using Redis and Dragonfly Databases",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yxx4c/prisma-redis-extension.git"
+  },
+  "homepage": "https://github.com/yxx4c/prisma-redis-extension",
+  "bugs": "https://github.com/yxx4c/prisma-redis-extension/issues",
+  "author": {
+    "name": "caxxy",
+    "email": "mail.yxx4c+npm@gmail.com",
+    "url": "https://github.com/yxx4c"
+  },
+  "keywords": [
+    "cache",
+    "dragonfly",
+    "extension",
+    "manager",
+    "middleware",
+    "prisma",
+    "redis",
+    "uncache"
+  ],
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {}
+  },
+  "files": [
+    "dist/**/*",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "format": "prettier --write .",
+    "semantic-release": "semantic-release",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "gts lint",
+    "clean": "gts clean",
+    "compile": "tsc",
+    "fix": "gts fix",
+    "prepare": "npm run compile",
+    "pretest": "npm run compile",
+    "posttest": "npm run lint"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.202",
+    "@types/node": "^20.11.5",
+    "conventional-changelog-conventionalcommits": "^7.0.2",
+    "gts": "^5.2.0",
+    "prettier": "^3.2.4",
+    "semantic-release": "^23.0.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "release": {
+    "branches": [
+      "main"
+    ],
+    "plugins": [
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "preset": "conventionalcommits",
+          "releaseRules": [
+            {
+              "type": "build",
+              "scope": "deps",
+              "release": "patch"
+            }
+          ]
+        }
+      ],
+      [
+        "@semantic-release/release-notes-generator",
+        {
+          "preset": "conventionalcommits",
+          "presetConfig": {
+            "types": [
+              {
+                "type": "feat",
+                "section": "Features"
+              },
+              {
+                "type": "fix",
+                "section": "Bug Fixes"
+              },
+              {
+                "type": "docs",
+                "section": "Documentation Changes"
+              },
+              {
+                "type": "build",
+                "section": "Dependencies and Other Build Updates",
+                "hidden": false
+              }
+            ]
+          }
+        }
+      ],
+      "@semantic-release/npm",
+      "@semantic-release/github"
+    ]
+  },
+  "dependencies": {
+    "@prisma/client": "^5.8.1",
+    "async-cache-dedupe": "^2.0.0",
+    "ioredis": "^5.3.2",
+    "lodash": "^4.17.21"
+  }
+}
