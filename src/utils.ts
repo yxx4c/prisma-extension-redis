@@ -1,4 +1,5 @@
 import {Operation} from '@prisma/client/runtime/library';
+import micromatch = require('micromatch');
 
 import {
   ActionCheckParams,
@@ -104,9 +105,15 @@ export const customUncacheAction = async ({
     'uncache'
   ] as unknown as UncacheOptions;
 
-  if (hasPattern)
-    await Promise.all(unlinkPatterns({redis, patterns: uncacheKeys}));
-  else redis.unlink(uncacheKeys);
+  if (hasPattern) {
+    await Promise.all(
+      unlinkPatterns({
+        redis,
+        patterns: micromatch(uncacheKeys, ['*\\**', '*\\?*']),
+      })
+    );
+    await redis.unlink(micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']));
+  } else await redis.unlink(uncacheKeys);
 
   return query(args);
 };

@@ -59,6 +59,7 @@
   },
   "devDependencies": {
     "@types/lodash": "^4.14.202",
+    "@types/micromatch": "^4.0.6",
     "@types/node": "^20.11.5",
     "conventional-changelog-conventionalcommits": "^7.0.2",
     "gts": "^5.2.0",
@@ -123,6 +124,7 @@
     "@prisma/client": "^5.8.1",
     "async-cache-dedupe": "^2.0.0",
     "ioredis": "^5.3.2",
-    "lodash": "^4.17.21"
+    "lodash": "^4.17.21",
+    "micromatch": "^4.0.5"
   }
 }
