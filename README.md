@@ -33,8 +33,8 @@ bun add @yxx4c/prisma-redis-extension
 ### Example
 
 ```javascript
-import { PrismaClient } from '@prisma/client';
-import { Redis } from 'ioredis';
+import {PrismaClient} from '@prisma/client';
+import {Redis} from 'ioredis';
 import pino from 'pino';
 import {
   getCacheKey,
@@ -54,7 +54,7 @@ const logger = pino();
 // Auto cache config
 const autoCacheConfig = {
   excludedModels: ['Post'], // Models to exclude from auto-caching
-  excludedOperations: ['findFirst', 'count', 'findMany'I], // Operations to exclude from auto-caching
+  excludedOperations: ['findFirst', 'count', 'findMany'], // Operations to exclude from auto-caching
   models: [
     {
       model: 'User',
@@ -74,7 +74,7 @@ const cacheConfig = {
     type: 'redis',
     options: {
       client: redis,
-      invalidation: { referencesTTL: 60 }, // Invalidation settings
+      invalidation: {referencesTTL: 60}, // Invalidation settings
       log: logger, // Logger for cache events
     },
   }, // Storage configuration for async-cache-dedupe
@@ -85,30 +85,30 @@ const prisma = new PrismaClient();
 
 // Extend Prisma with prisma-redis-extension
 const extendedPrisma = prisma.$extends(
-  PrismaRedisExtension({ auto: autoCacheConfig, cache: cacheConfig, redis })
+  PrismaRedisExtension({auto: autoCacheConfig, cache: cacheConfig, redis})
 );
 
 // Example: Query a user and cache the result - with async-cache-dedupe
 extendedPrisma.user.findUnique({
-  where: { id },
+  where: {id},
   cache: true, // Enable caching with default configuration
 });
 
 // Example: Query a user and cache the result - with custom configuration
 extendedPrisma.user.findUnique({
-  where: { id },
-  cache: { ttl: 5, key: getCacheKey([{ prisma: 'User' }, { userId: id }]) },
+  where: {id},
+  cache: {ttl: 5, key: getCacheKey([{prisma: 'User'}, {userId: id}])},
 });
 
 // Example: Update a user and invalidate related cache keys
 extendedPrisma.user.update({
-  where: { id },
-  data: { username },
+  where: {id},
+  data: {username},
   uncache: {
     uncacheKeys: [
-      getCacheKey([{ prisma: 'User' }, { userId: id }]),
-      getCacheKeyPattern([{ prisma: '*' }, { userId: id }]), // Pattern matching under a specific key, eg: prisma:*:userId:1234
-      getCacheKeyPattern([{ prisma: 'Post' }, { userId: id }, { glob: '*' }]), // Utilizing the key 'glob' to create a wildcard region, eg: prisma:post:userId:1234:*
+      getCacheKey([{prisma: 'User'}, {userId: id}]),
+      getCacheKeyPattern([{prisma: '*'}, {userId: id}]), // Pattern matching under a specific key, eg: prisma:*:userId:1234
+      getCacheKeyPattern([{prisma: 'Post'}, {userId: id}, {glob: '*'}]), // Utilizing the key 'glob' to create a wildcard region, eg: prisma:post:userId:1234:*
     ], // Keys to be invalidated
     hasPattern: true, // Use wildcard pattern for key matching
   },
