@@ -105,15 +105,15 @@ export const customUncacheAction = async ({
     'uncache'
   ] as unknown as UncacheOptions;
 
-  if (hasPattern) {
-    await Promise.all(
-      unlinkPatterns({
+  if (hasPattern)
+    await Promise.all([
+      ...unlinkPatterns({
         redis,
         patterns: micromatch(uncacheKeys, ['*\\**', '*\\?*']),
-      })
-    );
-    await redis.unlink(micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']));
-  } else await redis.unlink(uncacheKeys);
+      }),
+      redis.unlink(micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*'])),
+    ]);
+  else await redis.unlink(uncacheKeys);
 
   return query(args);
 };
