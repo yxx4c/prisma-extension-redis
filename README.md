@@ -30,7 +30,7 @@ pnpm add @yxx4c/prisma-redis-extension
 bun add @yxx4c/prisma-redis-extension
 ```
 
-### Example
+### Initializtion of setup
 
 ```javascript
 import {PrismaClient} from '@prisma/client';
@@ -50,9 +50,14 @@ const redis = new Redis({
 
 // Create a pino logger instance for logging
 const logger = pino();
+```
 
-// Auto cache config
-const autoCacheConfig = {
+### Auto cache config
+
+Auto-caching can be enabled for all read operations by default. Set `auto` to customize behavior or exclude specific models or operations.
+
+```javascript
+const auto = {
   excludedModels: ['Post'], // Models to exclude from auto-caching
   excludedOperations: ['findFirst', 'count', 'findMany'], // Operations to exclude from auto-caching
   models: [
@@ -65,9 +70,16 @@ const autoCacheConfig = {
   ], // Models-specific cache configurations
   ttl: 1, // Default time-to-live for caching
 };
+```
 
-// async-cache-dedupe config
-const cacheConfig = {
+_Cache Client Config is **required** to enable auto-cache._
+
+### Cache Client Config
+
+This configuration is required for enabling auto-cache and handling caching using `cache: true` or `cache: false` per Prisma query (refer use cases).
+
+```javascript
+const cache = {
   ttl: 1, // Time-to-live for caching
   stale: 1, // Stale time for caching
   storage: {
@@ -85,21 +97,44 @@ const prisma = new PrismaClient();
 
 // Extend Prisma with prisma-redis-extension
 const extendedPrisma = prisma.$extends(
-  PrismaRedisExtension({auto: autoCacheConfig, cache: cacheConfig, redis})
+  PrismaRedisExtension({auto, cache, redis})
 );
+```
 
-// Example: Query a user and cache the result - with async-cache-dedupe
+### Use case 1: Default Auto-Caching Configuration
+
+```javascript
+// Example: Query a user and cache the result when auto caching is enabled
+extendedPrisma.user.findUnique({
+  where: {id},
+});
+
+// Example: Query a user and cache the result by setting `cache: true` to toggle auto cache
 extendedPrisma.user.findUnique({
   where: {id},
   cache: true, // Enable caching with default configuration
 });
 
+// Example: Exclude automatic caching for a specific operation
+extendedPrisma.user.findFirst({
+  where: {userId: id},
+  cache: false, // Disable caching for this operation
+});
+```
+
+### Use case 2: Selective Caching with Custom Configuration
+
+```javascript
 // Example: Query a user and cache the result - with custom configuration
 extendedPrisma.user.findUnique({
   where: {id},
   cache: {ttl: 5, key: getCacheKey([{prisma: 'User'}, {userId: id}])},
 });
+```
 
+### Use case 3: Invalidation of Cached Data
+
+```javascript
 // Example: Update a user and invalidate related cache keys
 extendedPrisma.user.update({
   where: {id},
@@ -115,6 +150,8 @@ extendedPrisma.user.update({
 });
 ```
 
+_Custom cache invalidation is designed for custom caching (not auto-caching)._
+
 ### Dependencies
 
 - `ioredis`
@@ -127,31 +164,15 @@ extendedPrisma.user.update({
 - **Cache Invalidation Strategies:** Implement cache invalidation strategies to ensure that cached data remains up-to-date.
 - **Versatile Functions:** Utilize general-purpose functions for efficient Redis/Dragonfly database maintenance.
 
+---
+
 ### Deprecated Packages
 
 The following packages are planned for deprecation. We recommend considering `prisma-redis-extension` for combined functionality:
 
-#### prisma-redis-cache
-
-The `prisma-redis-cache` package is planned for deprecation. Please consider using `prisma-redis-extension` for a consolidated feature set.
-
-[⚠️ Deprecated Package](https://github.com/yxx4c/prisma-redis-cache)
-
----
-
-#### prisma-redis-uncache
-
-The `prisma-redis-uncache` package is planned for deprecation. Please consider using `prisma-redis-extension` for a consolidated feature set.
-
-[⚠️ Deprecated Package](https://github.com/yxx4c/prisma-redis-uncache)
-
----
-
-#### cache-utils
-
-The `cache-utils` package is planned for deprecation. Please consider using `prisma-redis-extension` for a consolidated feature set.
-
-[⚠️ Deprecated Package](https://github.com/yxx4c/cache-utils)
+- [⚠️ Deprecated Package: prisma-redis-cache](https://github.com/yxx4c/prisma-redis-cache)
+- [⚠️ Deprecated Package: prisma-redis-uncache](https://github.com/yxx4c/prisma-redis-uncache)
+- [⚠️ Deprecated Package: cache-utils](https://github.com/yxx4c/cache-utils)
 
 ---
 
