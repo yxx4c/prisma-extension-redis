@@ -51,7 +51,7 @@ export const autoCacheAction = async ({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (!(cache as any)[model])
-    cache.define(
+    cache!.define(
       model,
       {
         ttl,

@@ -216,7 +216,7 @@ export interface CacheDefinitionOptions {
   q: (args: JsArgs) => Promise<unknown>;
 }
 
-export type CacheConfig = Parameters<typeof createCache>[0];
+export type CacheConfig = NonNullable<Parameters<typeof createCache>[0]>;
 
 export interface ModelConfig {
   /**
@@ -269,7 +269,7 @@ export type AutoCacheConfig =
     }
   | boolean;
 
-export interface PrismaRedisExtensionConfig {
+export interface ExtensionAutoCacheConfig {
   /**
    * Auto cache config
    */
@@ -285,6 +285,17 @@ export interface PrismaRedisExtensionConfig {
    */
   redis: Redis;
 }
+
+export interface ExtensionCacheUncacheConfig {
+  /**
+   * Redis client
+   */
+  redis: Redis;
+}
+
+export type PrismaRedisExtensionConfig =
+  | ExtensionAutoCacheConfig
+  | ExtensionCacheUncacheConfig;
 
 export type DeletePatterns = {
   /**
@@ -302,7 +313,7 @@ export type ActionParams = {
   /**
    * async-cache-dedupe client
    */
-  cache: Cache;
+  cache?: Cache;
 
   /**
    * Model query options
@@ -329,7 +340,7 @@ export type ActionCheckParams = {
   /**
    * Auto cache config
    */
-  auto?: boolean | AutoCacheConfig;
+  auto?: AutoCacheConfig;
 
   /**
    * Model query options

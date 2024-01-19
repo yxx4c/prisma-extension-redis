@@ -1,5 +1,5 @@
 import {Prisma} from '@prisma/client/extension';
-import {Cache, createCache} from 'async-cache-dedupe';
+import {createCache} from 'async-cache-dedupe';
 import {ExtendedModel, PrismaRedisExtensionConfig} from './types';
 import {
   autoCacheAction,
@@ -11,12 +11,13 @@ import {
 } from './utils';
 
 export const PrismaRedisExtension = (config: PrismaRedisExtensionConfig) => {
-  const {auto, cache: _cache, redis} = config;
+  const {redis} = config;
 
-  const cache = _cache instanceof Cache ? _cache : createCache(_cache);
+  const cache = 'cache' in config ? createCache(config.cache) : undefined;
+  const auto = 'auto' in config && 'cache' in config ? config.auto : undefined;
 
   return Prisma.defineExtension({
-    name: 'prisma-redis-cache',
+    name: 'prisma-redis-extension',
     client: {
       redis,
       cache,
@@ -42,10 +43,10 @@ export const PrismaRedisExtension = (config: PrismaRedisExtensionConfig) => {
           }
 
           if (isCustomCacheEnabled({options}))
-            return customCacheAction({cache, redis, options});
+            return customCacheAction({redis, options});
 
           if (isCustomUncacheEnabled({options}))
-            return customUncacheAction({cache, redis, options});
+            return customUncacheAction({redis, options});
 
           return query(args);
         },
