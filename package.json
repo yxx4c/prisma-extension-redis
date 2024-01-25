@@ -1,6 +1,6 @@
 {
   "name": "@yxx4c/prisma-redis-extension",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Extensive Prisma extension designed for efficient caching and cache invalidation using Redis and Dragonfly Databases",
   "repository": {
     "type": "git",
@@ -122,6 +122,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.8.1",
+    "@yxx4c/cache-utils": "^0.0.6",
     "async-cache-dedupe": "^2.0.0",
     "ioredis": "^5.3.2",
     "lodash": "^4.17.21",

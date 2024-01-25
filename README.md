@@ -1,6 +1,6 @@
 # prisma-redis-extension
 
-The `prisma-redis-extension` library is a comprehensive package that consolidates the functionalities of the packages: [prisma-redis-cache](https://github.com/yxx4c/prisma-redis-cache), [prisma-redis-uncache](https://github.com/yxx4c/prisma-redis-uncache), and [cache-utils](https://github.com/yxx4c/cache-utils). This consolidation provides a unified solution for optimizing database access times, enhancing cache management, and offering versatile functions for efficient Redis/Dragonfly database maintenance.
+The `prisma-redis-extension` library is a comprehensive package that consolidates the functionalities of the packages: [prisma-redis-cache](https://github.com/yxx4c/prisma-redis-cache) and [prisma-redis-uncache](https://github.com/yxx4c/prisma-redis-uncache). This consolidation provides a unified solution for optimizing database access times, enhancing cache management, and offering versatile functions for efficient Redis/Dragonfly database maintenance.
 
 🚀 If `prisma-redis-extension` proves helpful, consider giving it a star! [⭐ Star Me!](https://github.com/yxx4c/prisma-redis-extension)
 
@@ -172,7 +172,6 @@ The following packages are planned for deprecation. We recommend considering `pr
 
 - [⚠️ Deprecated Package: prisma-redis-cache](https://github.com/yxx4c/prisma-redis-cache)
 - [⚠️ Deprecated Package: prisma-redis-uncache](https://github.com/yxx4c/prisma-redis-uncache)
-- [⚠️ Deprecated Package: cache-utils](https://github.com/yxx4c/cache-utils)
 
 ---
 
