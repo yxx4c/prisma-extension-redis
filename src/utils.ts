@@ -76,17 +76,21 @@ export const customCacheAction = async ({
 
   const {key, ttl} = xArgs['cache'] as unknown as CacheOptions;
 
-  const cached = await redis.get(key);
+  const [[_, cached]] =
+    (await redis.multi().call('JSON.GET', key).exec()) ?? [];
 
-  if (cached)
-    if (typeof cached === 'string') return JSON.parse(cached);
-    else return cached;
+  if (cached) return JSON.parse(cached as string);
 
   const result = await query(args);
   const value = JSON.stringify(result);
 
-  if (ttl && ttl !== Infinity) redis.setex(key, ttl, value);
-  else redis.set(key, value);
+  if (ttl && ttl !== Infinity)
+    redis
+      .multi()
+      .call('JSON.SET', key, '$', value)
+      .call('EXPIRE', key, ttl)
+      .exec();
+  else redis.multi().call('JSON.SET', key, '$', value).exec();
 
   return result;
 };
