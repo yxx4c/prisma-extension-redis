@@ -58,15 +58,14 @@
     "posttest": "npm run lint"
   },
   "devDependencies": {
-    "@types/lodash": "^4.14.202",
-    "@types/micromatch": "^4.0.6",
-    "@types/node": "^20.11.5",
+    "@types/micromatch": "^4.0.9",
+    "@types/node": "^20.16.1",
     "conventional-changelog-conventionalcommits": "^7.0.2",
-    "gts": "^5.2.0",
-    "prettier": "^3.2.4",
-    "semantic-release": "^23.0.0",
-    "tsup": "^8.0.1",
-    "typescript": "^5.3.3"
+    "gts": "^5.3.1",
+    "prettier": "^3.3.3",
+    "semantic-release": "^23.1.1",
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4"
   },
   "publishConfig": {
     "access": "public"
@@ -121,11 +120,10 @@
     ]
   },
   "dependencies": {
-    "@prisma/client": "^5.8.1",
-    "@yxx4c/cache-utils": "^0.0.6",
-    "async-cache-dedupe": "^2.0.0",
-    "ioredis": "^5.3.2",
-    "lodash": "^4.17.21",
-    "micromatch": "^4.0.5"
+    "@prisma/client": "^5.18.0",
+    "@yxx4c/cache-utils": "^0.0.7",
+    "async-cache-dedupe": "^2.2.0",
+    "ioredis": "^5.4.1",
+    "micromatch": "^4.0.7"
   }
 }
