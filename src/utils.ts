@@ -107,15 +107,22 @@ export const customUncacheAction = async ({
 
   const {uncacheKeys, hasPattern} = xArgs.uncache as unknown as UncacheOptions;
 
-  if (hasPattern)
-    await Promise.all([
+  if (hasPattern) {
+    const patternKeys = micromatch(uncacheKeys, ['*\\**', '*\\?*']);
+    const plainKeys = micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']);
+
+    const unlinkPromises = [
       ...unlinkPatterns({
         redis,
-        patterns: micromatch(uncacheKeys, ['*\\**', '*\\?*']),
+        patterns: patternKeys,
       }),
-      redis.unlink(micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*'])),
-    ]);
-  else await redis.unlink(uncacheKeys);
+      ...(plainKeys.length ? [redis.unlink(plainKeys)] : []),
+    ];
+
+    await Promise.all(unlinkPromises);
+  } else {
+    await redis.unlink(uncacheKeys);
+  }
 
   return query(args);
 };
