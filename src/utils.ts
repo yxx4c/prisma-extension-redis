@@ -1,17 +1,17 @@
-import {Operation} from '@prisma/client/runtime/library';
-import micromatch = require('micromatch');
+import type {Operation} from '@prisma/client/runtime/library';
+import micromatch from 'micromatch';
 
 import {
-  ActionCheckParams,
-  ActionParams,
+  type ActionCheckParams,
+  type ActionParams,
   AUTO_OPERATIONS,
-  autoOperations,
+  type autoOperations,
   CACHE_OPERATIONS,
-  CacheDefinitionOptions,
-  CacheOptions,
-  DeletePatterns,
+  type CacheDefinitionOptions,
+  type CacheOptions,
+  type DeletePatterns,
   UNCACHE_OPERATIONS,
-  UncacheOptions,
+  type UncacheOptions,
 } from './types';
 
 export const filterOperations =
@@ -47,11 +47,11 @@ export const autoCacheAction = async ({
     ...xArgs,
   };
 
-  delete args['cache'];
+  args.cache = undefined;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
   if (!(cache as any)[model])
-    cache!.define(
+    cache?.define(
       model,
       {
         ttl,
@@ -60,7 +60,7 @@ export const autoCacheAction = async ({
       ({a, q}: CacheDefinitionOptions) => q(a)
     );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
   return (cache as any)[model]({a: args, q: query});
 };
 
@@ -72,9 +72,9 @@ export const customCacheAction = async ({
     ...xArgs,
   };
 
-  delete args['cache'];
+  args.cache = undefined;
 
-  const {key, ttl} = xArgs['cache'] as unknown as CacheOptions;
+  const {key, ttl} = xArgs.cache as unknown as CacheOptions;
 
   const [[_, cached]] =
     (await redis.multi().call('JSON.GET', key).exec()) ?? [];
@@ -84,7 +84,7 @@ export const customCacheAction = async ({
   const result = await query(args);
   const value = JSON.stringify(result);
 
-  if (ttl && ttl !== Infinity)
+  if (ttl && ttl !== Number.POSITIVE_INFINITY)
     redis
       .multi()
       .call('JSON.SET', key, '$', value)
@@ -103,11 +103,9 @@ export const customUncacheAction = async ({
     ...xArgs,
   };
 
-  delete args['uncache'];
+  args.uncache = undefined;
 
-  const {uncacheKeys, hasPattern} = xArgs[
-    'uncache'
-  ] as unknown as UncacheOptions;
+  const {uncacheKeys, hasPattern} = xArgs.uncache as unknown as UncacheOptions;
 
   if (hasPattern)
     await Promise.all([
@@ -126,9 +124,9 @@ export const isAutoCacheEnabled = ({
   auto,
   options: {args: xArgs, model, operation},
 }: ActionCheckParams) => {
-  if (xArgs['cache'] !== undefined && typeof xArgs['cache'] === 'boolean')
-    return xArgs['cache'];
-  if (auto)
+  if (xArgs.cache !== undefined && typeof xArgs.cache === 'boolean')
+    return xArgs.cache;
+  if (auto) {
     if (typeof auto === 'object')
       return (
         filterOperations(...AUTO_OPERATIONS)(auto.excludedOperations).includes(
@@ -139,20 +137,21 @@ export const isAutoCacheEnabled = ({
           ?.find(m => m.model === model)
           ?.excludedOperations?.includes(operation as autoOperations)
       );
-    else return true;
+    return true;
+  }
   return false;
 };
 
 export const isCustomCacheEnabled = ({
   options: {args: xArgs, operation},
 }: ActionCheckParams) =>
-  !!xArgs['cache'] &&
-  typeof xArgs['cache'] === 'object' &&
+  !!xArgs.cache &&
+  typeof xArgs.cache === 'object' &&
   CACHE_OPERATIONS.includes(operation as (typeof CACHE_OPERATIONS)[number]);
 
 export const isCustomUncacheEnabled = ({
   options: {args: xArgs, operation},
 }: ActionCheckParams) =>
-  !!xArgs['uncache'] &&
-  typeof xArgs['uncache'] === 'object' &&
+  !!xArgs.uncache &&
+  typeof xArgs.uncache === 'object' &&
   UNCACHE_OPERATIONS.includes(operation as (typeof UNCACHE_OPERATIONS)[number]);

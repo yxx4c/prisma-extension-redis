@@ -1,6 +1,6 @@
 import {Prisma} from '@prisma/client/extension';
 import {createCache} from 'async-cache-dedupe';
-import {ExtendedModel, PrismaRedisExtensionConfig} from './types';
+import type {ExtendedModel, PrismaRedisExtensionConfig} from './types';
 import {
   autoCacheAction,
   customCacheAction,
@@ -31,8 +31,8 @@ export const PrismaRedisExtension = (config: PrismaRedisExtensionConfig) => {
           const {args, query} = options;
 
           if (isAutoCacheEnabled({auto, options})) {
-            let stale;
-            let ttl;
+            let stale = undefined;
+            let ttl = undefined;
             if (typeof auto === 'object') {
               const model = auto.models?.find(m => m.model === options.model);
               ttl = model?.ttl ?? auto.ttl;

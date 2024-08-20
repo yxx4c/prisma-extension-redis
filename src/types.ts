@@ -1,11 +1,11 @@
-import {
+import type {
   JsArgs,
   ModelQueryOptionsCbArgs,
   Operation,
 } from '@prisma/client/runtime/library';
-import {Prisma} from '@prisma/client/extension';
+import type {Prisma} from '@prisma/client/extension';
 import type {Redis} from 'ioredis';
-import {Cache, createCache} from 'async-cache-dedupe';
+import type {Cache, createCache} from 'async-cache-dedupe';
 
 export const ALL_OPERATIONS = [
   '$executeRaw',
@@ -182,14 +182,14 @@ type ModelExtension<
   [RO in Config['requiredArg'][number]]: M extends 'auto'
     ? AutoRequiredArgsFunction<RO>
     : M extends 'cache'
-    ? CacheRequiredArgsFunction<RO>
-    : UncacheRequiredArgsFunction<RO>;
+      ? CacheRequiredArgsFunction<RO>
+      : UncacheRequiredArgsFunction<RO>;
 } & {
   [OO in Config['optionalArg'][number]]: M extends 'auto'
     ? AutoOptionalArgsFunction<OO>
     : M extends 'cache'
-    ? CacheOptionalArgsFunction<OO>
-    : UncacheOptionalArgsFunction<OO>;
+      ? CacheOptionalArgsFunction<OO>
+      : UncacheOptionalArgsFunction<OO>;
 };
 
 type autoConfig = {
