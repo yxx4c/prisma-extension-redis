@@ -1,27 +1,27 @@
 {
-  "name": "@yxx4c/prisma-redis-extension",
-  "version": "0.1.0",
+  "name": "prisma-extension-redis",
+  "version": "1.0.0",
   "description": "Extensive Prisma extension designed for efficient caching and cache invalidation using Redis and Dragonfly Databases",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yxx4c/prisma-redis-extension.git"
+    "url": "https://github.com/yxx4c/prisma-extension-redis.git"
   },
-  "homepage": "https://github.com/yxx4c/prisma-redis-extension",
-  "bugs": "https://github.com/yxx4c/prisma-redis-extension/issues",
+  "homepage": "https://github.com/yxx4c/prisma-extension-redis",
+  "bugs": "https://github.com/yxx4c/prisma-extension-redis/issues",
   "author": {
     "name": "caxxy",
     "email": "mail.yxx4c+npm@gmail.com",
     "url": "https://github.com/yxx4c"
   },
   "keywords": [
-    "cache",
-    "dragonfly",
-    "extension",
-    "manager",
-    "middleware",
     "prisma",
+    "extension",
     "redis",
-    "uncache"
+    "cache",
+    "uncache",
+    "dragonfly",
+    "middleware",
+    "manager"
   ],
   "license": "MIT",
   "main": "./dist/index.js",
@@ -29,9 +29,9 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts",
       "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/index.mjs"
     },
     "./package.json": "./package.json"
   },

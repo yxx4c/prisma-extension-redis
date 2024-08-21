@@ -1,33 +1,33 @@
-# prisma-redis-extension
+# prisma-extension-redis
 
-The `prisma-redis-extension` library is a comprehensive package that consolidates the functionalities of the packages: [prisma-redis-cache](https://github.com/yxx4c/prisma-redis-cache) and [prisma-redis-uncache](https://github.com/yxx4c/prisma-redis-uncache). This consolidation provides a unified solution for optimizing database access times, enhancing cache management, and offering versatile functions for efficient Redis/Dragonfly database maintenance.
+The `prisma-extension-redis` library is a comprehensive package that provides a unified solution for optimizing database access times, enhancing cache management, and offering versatile functions for efficient Redis/Dragonfly database maintenance.
 
-🚀 If `prisma-redis-extension` proves helpful, consider giving it a star! [⭐ Star Me!](https://github.com/yxx4c/prisma-redis-extension)
+🚀 If `prisma-extension-redis` proves helpful, consider giving it a star! [⭐ Star Me!](https://github.com/yxx4c/prisma-extension-redis)
 
 ### **Installation**
 
 ##### **Using npm:**
 
 ```bash
-npm install @yxx4c/prisma-redis-extension
+npm install prisma-extension-redis
 ```
 
 ##### **Using yarn:**
 
 ```bash
-yarn add @yxx4c/prisma-redis-extension
+yarn add prisma-extension-redis
 ```
 
 ##### **Using pnpm:**
 
 ```bash
-pnpm add @yxx4c/prisma-redis-extension
+pnpm add prisma-extension-redis
 ```
 
 ##### **Using bun:**
 
 ```bash
-bun add @yxx4c/prisma-redis-extension
+bun add prisma-extension-redis
 ```
 
 ### Initializtion of setup
@@ -39,8 +39,8 @@ import pino from 'pino';
 import {
   getCacheKey,
   getCacheKeyPattern,
-  PrismaRedisExtension,
-} from '@yxx4c/prisma-redis-extension';
+  PrismaExtensionRedis,
+} from 'prisma-extension-redis';
 
 // Create a Redis client
 const redis = new Redis({
@@ -91,13 +91,17 @@ const cache = {
     },
   }, // Storage configuration for async-cache-dedupe
 };
+```
 
+### Create Prisma Extended Client
+
+```javascript
 // Create a Prisma client instance
 const prisma = new PrismaClient();
 
-// Extend Prisma with prisma-redis-extension
+// Extend Prisma with prisma-extension-redis
 const extendedPrisma = prisma.$extends(
-  PrismaRedisExtension({auto, cache, redis})
+  PrismaExtensionRedis({auto, cache, redis})
 );
 ```
 
@@ -166,20 +170,11 @@ _Custom cache invalidation is designed for custom caching (not auto-caching)._
 
 ---
 
-### Deprecated Packages
+**Why use prisma-extension-redis?**
 
-The following packages are planned for deprecation. We recommend considering `prisma-redis-extension` for combined functionality:
-
-- [⚠️ Deprecated Package: prisma-redis-cache](https://github.com/yxx4c/prisma-redis-cache)
-- [⚠️ Deprecated Package: prisma-redis-uncache](https://github.com/yxx4c/prisma-redis-uncache)
-
----
-
-**Why use prisma-redis-extension?**
-
-- **Simplified Dependencies:** Instead of managing multiple packages, you now only need `prisma-redis-extension` for all the features.
+- **Simplified Dependencies:** Instead of managing multiple packages, you now only need `prisma-extension-redis` for all the features.
 - **Enhanced Maintenance:** Centralized updates and improvements for all functionalities, leading to easier maintenance.
 - **Streamlined Codebase:** Consolidate your codebase by eliminating redundant dependencies and optimizing performance.
-- **Community Focus:** Join the community around `prisma-redis-extension` for collective support and collaborative development.
+- **Community Focus:** Join the community around `prisma-extension-redis` for collective support and collaborative development.
 
-Upgrade to `prisma-redis-extension` today to experience a more streamlined and efficient Redis caching solution.
+Upgrade to `prisma-extension-redis` today to experience a more streamlined and efficient Redis caching solution.

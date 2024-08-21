@@ -293,7 +293,7 @@ export interface ExtensionCacheUncacheConfig {
   redis: Redis;
 }
 
-export type PrismaRedisExtensionConfig =
+export type PrismaExtensionRedisConfig =
   | ExtensionAutoCacheConfig
   | ExtensionCacheUncacheConfig;
 

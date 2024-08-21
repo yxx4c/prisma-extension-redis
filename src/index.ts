@@ -1,5 +1,5 @@
 export {getCacheKey, getCacheKeyPattern} from '@yxx4c/cache-utils';
-export {PrismaRedisExtension} from './prismaRedisExtension';
+export {PrismaExtensionRedis} from './prismaExtensionRedis';
 export type {
   AutoCacheConfig,
   CacheConfig,
