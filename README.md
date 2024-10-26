@@ -4,33 +4,33 @@ The `prisma-extension-redis` library is a comprehensive package that provides a 
 
 🚀 If `prisma-extension-redis` proves helpful, consider giving it a star! [⭐ Star Me!](https://github.com/yxx4c/prisma-extension-redis)
 
-### **Installation**
+## **Installation**
 
-##### **Using npm:**
+**Using npm:**
 
 ```bash
 npm install prisma-extension-redis
 ```
 
-##### **Using yarn:**
+**Using yarn:**
 
 ```bash
 yarn add prisma-extension-redis
 ```
 
-##### **Using pnpm:**
+**Using pnpm:**
 
 ```bash
 pnpm add prisma-extension-redis
 ```
 
-##### **Using bun:**
+**Using bun:**
 
 ```bash
 bun add prisma-extension-redis
 ```
 
-### Initializtion of setup
+## Initialization of setup
 
 ```javascript
 import {PrismaClient} from '@prisma/client';
@@ -58,8 +58,8 @@ Auto-caching can be enabled for all read operations by default. Set `auto` to cu
 
 ```javascript
 const auto = {
-  excludedModels: ['Post'], // Models to exclude from auto-caching
-  excludedOperations: ['findFirst', 'count', 'findMany'], // Operations to exclude from auto-caching
+  excludedModels: ['Post'], // Models to exclude from auto-caching default behavior
+  excludedOperations: ['findFirst', 'count', 'findMany'], // Operations to exclude from auto-caching default behavior
   models: [
     {
       model: 'User',
@@ -67,7 +67,7 @@ const auto = {
       ttl: 10, // Time-to-live for caching
       stale: 5, // Stale time for caching
     },
-  ], // Models-specific cache configurations
+  ], // Custom auto-cache configuration for specific models
   ttl: 1, // Default time-to-live for caching
 };
 ```
@@ -156,11 +156,20 @@ extendedPrisma.user.update({
 
 _Custom cache invalidation is designed for custom caching (not auto-caching)._
 
-### Dependencies
+## Additional Information
+
+- All durations must be specified in seconds (Time-to-Live, Stale Time, ReferenceTTL).
+- Any configuration for auto-cache exclusion will result in the query being omitted from auto-cache during execution.
+
+## Prerequisites
+
+- `Redis.JSON` must be enabled in your Redis instance (this is enabled by default in Dragonfly).
+
+## Dependencies
 
 - `ioredis`
 
-### Key Features
+## Key Features
 
 - **Automatic Query Result Caching:** Easily cache Prisma query results in Redis with minimal configuration.
 - **Selective Cache Invalidation:** Invalidate specific Prisma queries to ensure accurate and up-to-date data retrieval.
