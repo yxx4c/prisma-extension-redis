@@ -58,6 +58,7 @@
     "posttest": "npm run lint"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@types/micromatch": "^4.0.9",
     "@types/node": "^20.16.1",
     "conventional-changelog-conventionalcommits": "^7.0.2",
