@@ -2,10 +2,9 @@ import type {Operation} from '@prisma/client/runtime/library';
 import micromatch from 'micromatch';
 
 import {
+  AUTO_OPERATIONS,
   type ActionCheckParams,
   type ActionParams,
-  AUTO_OPERATIONS,
-  type autoOperations,
   CACHE_OPERATIONS,
   type CacheConfig,
   type CacheDefinitionOptions,
@@ -13,6 +12,7 @@ import {
   type DeletePatterns,
   UNCACHE_OPERATIONS,
   type UncacheOptions,
+  type autoOperations,
 } from './types';
 
 export const filterOperations =

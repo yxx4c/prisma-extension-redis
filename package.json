@@ -38,11 +38,7 @@
   "typesVersions": {
     "*": {}
   },
-  "files": [
-    "dist/**/*",
-    "LICENSE",
-    "README.md"
-  ],
+  "files": ["dist/**/*", "LICENSE", "README.md"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -72,9 +68,7 @@
     "access": "public"
   },
   "release": {
-    "branches": [
-      "main"
-    ],
+    "branches": ["main"],
     "plugins": [
       [
         "@semantic-release/commit-analyzer",
