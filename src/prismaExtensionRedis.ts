@@ -13,8 +13,9 @@ import {
 export const PrismaExtensionRedis = (config: PrismaExtensionRedisConfig) => {
   const {redis} = config;
 
-  const cache = 'cache' in config ? createCache(config.cache) : undefined;
   const auto = 'auto' in config && 'cache' in config ? config.auto : undefined;
+  const cacheConfig = 'cache' in config ? config.cache : undefined;
+  const cache = cacheConfig ? createCache(cacheConfig) : undefined;
 
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',
@@ -43,7 +44,11 @@ export const PrismaExtensionRedis = (config: PrismaExtensionRedisConfig) => {
           }
 
           if (isCustomCacheEnabled({options}))
-            return customCacheAction({redis, options});
+            return customCacheAction({
+              redis,
+              options,
+              config: cacheConfig,
+            });
 
           if (isCustomUncacheEnabled({options}))
             return customUncacheAction({redis, options});
