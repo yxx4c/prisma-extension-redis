@@ -1,0 +1,39 @@
+name: prisma
+services:
+  dragonfly:
+    image: 'docker.dragonflydb.io/dragonflydb/dragonfly'
+    hostname: dragonfly
+    container_name: dragonfly
+    restart: always
+    mem_limit: 512m
+    cpus: 1
+    ulimits:
+      memlock: -1
+    ports:
+      - '6379:6379'
+    volumes:
+      - dragonfly:/data
+    command:
+      [
+        '--default_lua_flags',
+        'allow-undeclared-keys',
+        '--cluster_mode',
+        'emulated',
+        '--lock_on_hashtags',
+      ]
+  insight:
+    image: 'redis/redisinsight'
+    hostname: insight
+    container_name: insight
+    restart: always
+    mem_limit: 512m
+    cpus: 1
+    ulimits:
+      memlock: -1
+    ports:
+      - '5540:5540'
+    volumes:
+      - insight:/data
+volumes:
+  dragonfly:
+  insight:
