@@ -2,16 +2,17 @@ import type {Operation} from '@prisma/client/runtime/library';
 import micromatch from 'micromatch';
 
 import {
+  AUTO_OPERATIONS,
   type ActionCheckParams,
   type ActionParams,
-  AUTO_OPERATIONS,
-  type autoOperations,
   CACHE_OPERATIONS,
+  type CacheConfig,
   type CacheDefinitionOptions,
   type CacheOptions,
   type DeletePatterns,
   UNCACHE_OPERATIONS,
   type UncacheOptions,
+  type autoOperations,
 } from './types';
 
 export const filterOperations =
@@ -34,7 +35,7 @@ export const unlinkPatterns = ({patterns, redis}: DeletePatterns) =>
           }
         });
         stream.on('end', () => resolve(true));
-      })
+      }),
   );
 
 export const autoCacheAction = async ({
@@ -57,7 +58,7 @@ export const autoCacheAction = async ({
         ttl,
         stale,
       },
-      ({a, q}: CacheDefinitionOptions) => q(a)
+      ({a, q}: CacheDefinitionOptions) => q(a),
     );
 
   // biome-ignore lint/suspicious/noExplicitAny: <explanation>
@@ -67,7 +68,8 @@ export const autoCacheAction = async ({
 export const customCacheAction = async ({
   redis,
   options: {args: xArgs, query},
-}: ActionParams) => {
+  config,
+}: ActionParams & {config: CacheConfig | undefined}) => {
   const args = {
     ...xArgs,
   };
@@ -79,10 +81,11 @@ export const customCacheAction = async ({
   const [[_, cached]] =
     (await redis.multi().call('JSON.GET', key).exec()) ?? [];
 
-  if (cached) return JSON.parse(cached as string);
+  if (cached)
+    return (config?.transformer?.deserialize || JSON.parse)(cached as string);
 
   const result = await query(args);
-  const value = JSON.stringify(result);
+  const value = (config?.transformer?.serialize || JSON.stringify)(result);
 
   if (ttl && ttl !== Number.POSITIVE_INFINITY)
     redis
@@ -137,7 +140,7 @@ export const isAutoCacheEnabled = ({
     if (typeof auto === 'object')
       return (
         filterOperations(...AUTO_OPERATIONS)(auto.excludedOperations).includes(
-          operation as autoOperations
+          operation as autoOperations,
         ) &&
         !auto.excludedModels?.includes(model) &&
         !auto.models

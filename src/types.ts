@@ -1,11 +1,11 @@
+import type {Prisma} from '@prisma/client/extension';
 import type {
   JsArgs,
   ModelQueryOptionsCbArgs,
   Operation,
 } from '@prisma/client/runtime/library';
-import type {Prisma} from '@prisma/client/extension';
-import type {Redis} from 'ioredis';
 import type {Cache, createCache} from 'async-cache-dedupe';
+import type {Redis} from 'ioredis';
 
 export const ALL_OPERATIONS = [
   '$executeRaw',
@@ -139,32 +139,32 @@ type PrismaUncacheArgs = {
 
 type AutoRequiredArgsFunction<O extends Operation> = <T, A>(
   this: T,
-  args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>
+  args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>,
 ) => Promise<Prisma.Result<T, A, O>>;
 
 type AutoOptionalArgsFunction<O extends Operation> = <T, A>(
   this: T,
-  args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>
+  args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>,
 ) => Promise<Prisma.Result<T, A, O>>;
 
 type CacheRequiredArgsFunction<O extends Operation> = <T, A>(
   this: T,
-  args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs>
+  args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs>,
 ) => Promise<Prisma.Result<T, A, O>>;
 
 type CacheOptionalArgsFunction<O extends Operation> = <T, A>(
   this: T,
-  args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs>
+  args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs>,
 ) => Promise<Prisma.Result<T, A, O>>;
 
 type UncacheRequiredArgsFunction<O extends Operation> = <T, A>(
   this: T,
-  args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaUncacheArgs>
+  args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaUncacheArgs>,
 ) => Promise<Prisma.Result<T, A, O>>;
 
 type UncacheOptionalArgsFunction<O extends Operation> = <T, A>(
   this: T,
-  args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaUncacheArgs>
+  args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaUncacheArgs>,
 ) => Promise<Prisma.Result<T, A, O>>;
 
 type OperationsConfig<
