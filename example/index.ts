@@ -56,6 +56,9 @@ const cache: CacheConfig = {
     deserialize: data => SuperJSON.parse(data), // default value of deserialize function
     serialize: data => SuperJSON.stringify(data), // default value of serialize function
   },
+  onHit: (key: string) => console.log(`FOUND CACHE: ${key}`),
+  onMiss: (key: string) => console.log(`NOT FOUND CACHE: ${key}`),
+  type: 'STRING',
 };
 
 const client = new PrismaClient();
@@ -126,9 +129,8 @@ const main = async () => {
       data: {name: userOne.name},
       uncache: {
         uncacheKeys: [
-          getCacheKeyPattern([{prisma: 'User'}, {email: userTwo.email}]),
+          getCacheKey([{prisma: 'User'}, {email: userTwo.email}]),
         ],
-        hasPattern: true,
       },
     })
     .then(updated => logger.info({type: 'DATABASE: Update userTwo', updated}));
