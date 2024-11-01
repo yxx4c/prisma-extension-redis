@@ -90,6 +90,7 @@ const cache = {
       log: logger, // Logger for cache events
     },
   }, // Storage configuration for async-cache-dedupe
+  type: 'STRING' // Type of Redis.* cache to use(Default: JSON, supported: JSON | STRING)
 };
 ```
 
