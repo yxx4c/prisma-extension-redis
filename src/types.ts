@@ -216,7 +216,11 @@ export interface CacheDefinitionOptions {
   q: (args: JsArgs) => Promise<unknown>;
 }
 
-export type CacheConfig = NonNullable<Parameters<typeof createCache>[0]>;
+export type CacheType = 'JSON' | 'STRING';
+
+export type CacheConfig = NonNullable<Parameters<typeof createCache>[0]> & {
+  type?: CacheType;
+};
 
 export interface ModelConfig {
   /**

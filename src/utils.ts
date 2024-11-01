@@ -1,5 +1,6 @@
 import type {Operation} from '@prisma/client/runtime/library';
 import micromatch from 'micromatch';
+import type Redis from 'ioredis';
 
 import {
   AUTO_OPERATIONS,
@@ -9,6 +10,7 @@ import {
   type CacheConfig,
   type CacheDefinitionOptions,
   type CacheOptions,
+  type CacheType,
   type DeletePatterns,
   UNCACHE_OPERATIONS,
   type UncacheOptions,
@@ -65,6 +67,72 @@ export const autoCacheAction = async ({
   return (cache as any)[model]({a: args, q: query});
 };
 
+export const getCache = async (
+  type: CacheType | undefined,
+  key: string,
+  redis: Redis,
+) => {
+  if (!type) return await redis.multi().call('JSON.GET', key).exec();
+
+  switch (type) {
+    case 'JSON':
+      return await redis.multi().call('JSON.GET', key).exec();
+
+    case 'STRING':
+      return await redis.multi().call('GET', key).exec();
+
+    default:
+      throw new Error(
+        'Incorrect CacheType provided! Use known type value such as JSON | STRING. Default: JSON',
+      );
+  }
+};
+
+export const setCache = async (
+  type: CacheType | undefined,
+  key: string,
+  value: string,
+  ttl: number | undefined,
+  redis: Redis,
+) => {
+  if (!type) {
+    if (ttl && ttl !== Number.POSITIVE_INFINITY)
+      return redis
+        .multi()
+        .call('JSON.SET', key, '$', value)
+        .call('EXPIRE', key, ttl)
+        .exec();
+    return redis.multi().call('JSON.SET', key, '$', value).exec();
+  }
+
+  switch (type) {
+    case 'JSON': {
+      if (ttl && ttl !== Number.POSITIVE_INFINITY)
+        return redis
+          .multi()
+          .call('JSON.SET', key, '$', value)
+          .call('EXPIRE', key, ttl)
+          .exec();
+      return redis.multi().call('JSON.SET', key, '$', value).exec();
+    }
+
+    case 'STRING': {
+      if (ttl && ttl !== Number.POSITIVE_INFINITY)
+        return redis
+          .multi()
+          .call('SET', key, value)
+          .call('EXPIRE', key, ttl)
+          .exec();
+      return await redis.multi().call('SET', key, value).exec();
+    }
+
+    default:
+      throw new Error(
+        'Incorrect CacheType provided! Use known type value such as JSON | STRING. Default: JSON',
+      );
+  }
+};
+
 export const customCacheAction = async ({
   redis,
   options: {args: xArgs, query},
@@ -78,22 +146,18 @@ export const customCacheAction = async ({
 
   const {key, ttl} = xArgs.cache as unknown as CacheOptions;
 
-  const [[_, cached]] =
-    (await redis.multi().call('JSON.GET', key).exec()) ?? [];
+  const [[_, cached]] = (await getCache(config?.type, key, redis)) ?? [];
 
-  if (cached)
+  if (cached) {
+    if (config?.onHit) config.onHit(key);
     return (config?.transformer?.deserialize || JSON.parse)(cached as string);
+  }
+  if (config?.onMiss) config.onMiss(key);
 
   const result = await query(args);
   const value = (config?.transformer?.serialize || JSON.stringify)(result);
 
-  if (ttl && ttl !== Number.POSITIVE_INFINITY)
-    redis
-      .multi()
-      .call('JSON.SET', key, '$', value)
-      .call('EXPIRE', key, ttl)
-      .exec();
-  else redis.multi().call('JSON.SET', key, '$', value).exec();
+  setCache(config?.type, key, value, ttl, redis);
 
   return result;
 };
