@@ -7,6 +7,8 @@ import type {
 import type {Cache, createCache} from 'async-cache-dedupe';
 import type {Redis} from 'ioredis';
 
+import type {CacheCase} from './cacheKey';
+
 export const ALL_OPERATIONS = [
   '$executeRaw',
   '$executeRawUnsafe',
@@ -351,3 +353,7 @@ export type ActionCheckParams = {
    */
   options: ModelQueryOptionsCbArgs;
 };
+
+export type CacheKeyParams = Record<string, string>[];
+
+export type CacheKeyPatternParams = Record<string, string>[];
