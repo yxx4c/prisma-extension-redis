@@ -8,7 +8,7 @@ import {
   isAutoCacheEnabled,
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
-} from './utils';
+} from './cacheUncache';
 
 export const PrismaExtensionRedis = (config: PrismaExtensionRedisConfig) => {
   const {redis} = config;
