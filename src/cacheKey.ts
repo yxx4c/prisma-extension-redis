@@ -1,6 +1,11 @@
 import {camelCase, kebabCase, snakeCase, startCase} from 'lodash-es';
 
-import type {CacheKeyParams, CacheKeyPatternParams} from './types';
+import type {
+  CacheAutoKeyParams,
+  CacheKeyParams,
+  CacheKeyPatternParams,
+} from './types';
+import {hash} from 'object-code';
 
 const globCheckRegex = /[*?]/;
 
@@ -20,41 +25,58 @@ export const caseMap = {
   [CacheCase.START_CASE]: startCase,
 };
 
-export const getCacheKey = (
-  params: CacheKeyParams,
-  delimiter = ':',
-  cacheCase: CacheCase = CacheCase.CAMEL_CASE,
-) =>
-  params
-    .map(obj =>
-      Object.entries(obj)
-        .map(
-          ([key, value]) =>
-            `${caseMap[cacheCase](key)}:${caseMap[cacheCase](value)}`,
-        )
-        .join(delimiter),
-    )
-    .join(delimiter);
+export const getKeyGen =
+  (
+    delimiter = ':',
+    cacheCase: CacheCase = CacheCase.CAMEL_CASE,
+    prefix = 'prisma',
+  ) =>
+  ({params, model, operation: op}: CacheKeyParams) =>
+    [...(model ? [{[prefix]: model}] : []), ...(op ? [{op}] : []), ...params]
+      .map(obj =>
+        Object.entries(obj)
+          .map(
+            ([key, value]) =>
+              `${caseMap[cacheCase](key)}${delimiter}${caseMap[cacheCase](value)}`,
+          )
+          .join(delimiter),
+      )
+      .join(delimiter);
 
-export const getCacheKeyPattern = (
-  params: CacheKeyPatternParams,
-  delimiter = ':',
-  cacheCase: CacheCase = CacheCase.CAMEL_CASE,
-) =>
-  params
-    .map(obj =>
-      Object.entries(obj)
-        .map(([key, value]) => {
-          if (key.toLowerCase() === 'glob') return value;
+export const getAutoKeyGen =
+  (getKey: (input: CacheKeyParams) => string) =>
+  ({args, model, operation}: CacheAutoKeyParams) =>
+    getKey({
+      params: [{key: hash({...args, cache: undefined}).toString()}],
+      model,
+      operation,
+    });
 
-          const formattedKey = globCheck(key) ? key : caseMap[cacheCase](key);
+export const getKeyPatternGen =
+  (
+    delimiter = ':',
+    cacheCase: CacheCase = CacheCase.CAMEL_CASE,
+    prefix = 'prisma',
+  ) =>
+  ({params, model, operation: op}: CacheKeyPatternParams) =>
+    [
+      ...(model && prefix ? [{[prefix]: model}] : []),
+      ...(op ? [{op}] : []),
+      ...params,
+    ]
+      .map(obj =>
+        Object.entries(obj)
+          .map(([key, value]) => {
+            if (key.toLowerCase() === 'glob') return value;
 
-          const formattedValue = globCheck(value)
-            ? value
-            : caseMap[cacheCase](value);
+            const formattedKey = globCheck(key) ? key : caseMap[cacheCase](key);
 
-          return `${formattedKey}:${formattedValue}`;
-        })
-        .join(delimiter),
-    )
-    .join(delimiter);
+            const formattedValue = globCheck(value)
+              ? value
+              : caseMap[cacheCase](value);
+
+            return `${formattedKey}${delimiter}${formattedValue}`;
+          })
+          .join(delimiter),
+      )
+      .join(delimiter);

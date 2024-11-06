@@ -1,6 +1,7 @@
-import type {Operation} from '@prisma/client/runtime/library';
 import micromatch from 'micromatch';
-import type Redis from 'ioredis';
+
+import type {Operation} from '@prisma/client/runtime/library';
+import type Redis from 'iovalkey';
 
 import {
   AUTO_OPERATIONS,
@@ -8,14 +9,15 @@ import {
   type ActionParams,
   CACHE_OPERATIONS,
   type CacheConfig,
-  type CacheDefinitionOptions,
   type CacheOptions,
   type CacheType,
   type DeletePatterns,
+  type GetDataParams,
   UNCACHE_OPERATIONS,
   type UncacheOptions,
   type autoOperations,
 } from './types';
+import type {getAutoKeyGen, getKeyGen} from './cacheKey';
 
 export const filterOperations =
   <T extends Operation[]>(...ops: T) =>
@@ -40,71 +42,13 @@ export const unlinkPatterns = ({patterns, redis}: DeletePatterns) =>
       }),
   );
 
-export const autoCacheAction = async ({
-  cache,
-  options: {args: xArgs, model, query},
-  stale,
-  ttl,
-}: ActionParams) => {
-  const args = {
-    ...xArgs,
-  };
-
-  args.cache = undefined;
-
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-  if (!(cache as any)[model])
-    cache?.define(
-      model,
-      {
-        ttl,
-        stale,
-      },
-      ({a, q}: CacheDefinitionOptions) => q(a),
-    );
-
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-  return (cache as any)[model]({a: args, q: query});
-};
-
-export const getCache = async (
-  type: CacheType | undefined,
-  key: string,
-  redis: Redis,
-) => {
-  if (!type) return await redis.multi().call('JSON.GET', key).exec();
-
-  switch (type) {
-    case 'JSON':
-      return await redis.multi().call('JSON.GET', key).exec();
-
-    case 'STRING':
-      return await redis.multi().call('GET', key).exec();
-
-    default:
-      throw new Error(
-        'Incorrect CacheType provided! Use known type value such as JSON | STRING. Default: JSON',
-      );
-  }
-};
-
 export const setCache = async (
-  type: CacheType | undefined,
+  type: CacheType,
   key: string,
   value: string,
   ttl: number | undefined,
   redis: Redis,
 ) => {
-  if (!type) {
-    if (ttl && ttl !== Number.POSITIVE_INFINITY)
-      return redis
-        .multi()
-        .call('JSON.SET', key, '$', value)
-        .call('EXPIRE', key, ttl)
-        .exec();
-    return redis.multi().call('JSON.SET', key, '$', value).exec();
-  }
-
   switch (type) {
     case 'JSON': {
       if (ttl && ttl !== Number.POSITIVE_INFINITY)
@@ -128,76 +72,177 @@ export const setCache = async (
 
     default:
       throw new Error(
-        'Incorrect CacheType provided! Use known type value such as JSON | STRING. Default: JSON',
+        'Incorrect CacheType provided! Supported values: JSON | STRING',
       );
   }
 };
 
+export const getCache = async ({
+  ttl,
+  stale,
+  config,
+  key,
+  redis,
+  args: xArgs,
+  query,
+}: GetDataParams) => {
+  const {onError, onHit, onMiss, transformer, type} = config;
+
+  try {
+    let cache: [error: Error | null, result: unknown][] | null = null;
+
+    switch (type) {
+      case 'JSON': {
+        cache = await redis.multi().call('JSON.GET', key).exec();
+        break;
+      }
+
+      case 'STRING': {
+        cache = await redis.multi().call('GET', key).exec();
+        break;
+      }
+
+      default:
+        throw new Error(
+          'Incorrect CacheType provided! Supported values: JSON | STRING',
+        );
+    }
+
+    const [[error, cached]] = cache ?? [];
+
+    if (onError && error) onError(error);
+
+    const timestamp = Date.now();
+
+    const args = {
+      ...xArgs,
+    };
+
+    args.cache = undefined;
+
+    if (cached) {
+      if (onHit) onHit(key);
+      const {
+        result,
+        ttl: cacheTtl,
+        stale: cacheStale,
+      } = (transformer?.deserialize || JSON.parse)(cached as string);
+
+      if (timestamp < cacheTtl) return result;
+      if (timestamp <= cacheStale) {
+        query(args).then(result => {
+          const cacheContext = {
+            result,
+            ttl: ttl * 1000 + timestamp,
+            stale: (ttl + stale) * 1000 + timestamp,
+          };
+
+          const value = (transformer?.serialize || JSON.stringify)(
+            cacheContext,
+          );
+
+          setCache(type, key, value, ttl + stale, redis);
+        });
+        return result;
+      }
+    } else if (onMiss) onMiss(key);
+
+    const result = await query(args);
+
+    const cacheContext = {
+      result,
+      ttl: ttl * 1000 + timestamp,
+      stale: (ttl + stale) * 1000 + timestamp,
+    };
+
+    const value = (transformer?.serialize || JSON.stringify)(cacheContext);
+
+    setCache(type, key, value, ttl + stale, redis);
+  } catch (error) {
+    if (onError) onError(error);
+    else throw error;
+  }
+};
+
+export const autoCacheAction = async (
+  {redis, options, config}: ActionParams,
+  getAutoKey: ReturnType<typeof getAutoKeyGen>,
+) => {
+  const {auto} = config;
+
+  const {query, args, model, operation} = options;
+
+  let stale = 0;
+  let ttl = 0;
+
+  if (typeof auto === 'object') {
+    const modelConfig = auto.models?.find(m => m.model === model);
+    ttl =
+      modelConfig?.ttl ?? auto.ttl ?? config.ttl ?? Number.POSITIVE_INFINITY;
+    stale = modelConfig?.stale ?? auto.stale ?? config.stale ?? 0;
+  }
+
+  const key = getAutoKey({args, model, operation: operation as Operation});
+
+  return await getCache({ttl, stale, config, key, redis, args, query});
+};
+
 export const customCacheAction = async ({
   redis,
-  options: {args: xArgs, query},
+  options: {args, query},
   config,
-}: ActionParams & {config: CacheConfig | undefined}) => {
-  const args = {
-    ...xArgs,
-  };
+}: ActionParams) => {
+  const {
+    key,
+    ttl: customTtl,
+    stale: customStale,
+  } = args.cache as unknown as CacheOptions;
 
-  args.cache = undefined;
+  const stale = customStale ?? config.stale ?? 0;
+  const ttl = customTtl ?? config.ttl ?? Number.POSITIVE_INFINITY;
 
-  const {key, ttl} = xArgs.cache as unknown as CacheOptions;
-
-  const [[_, cached]] = (await getCache(config?.type, key, redis)) ?? [];
-
-  if (cached) {
-    if (config?.onHit) config.onHit(key);
-    return (config?.transformer?.deserialize || JSON.parse)(cached as string);
-  }
-  if (config?.onMiss) config.onMiss(key);
-
-  const result = await query(args);
-  const value = (config?.transformer?.serialize || JSON.stringify)(result);
-
-  setCache(config?.type, key, value, ttl, redis);
-
-  return result;
+  return await getCache({ttl, stale, config, key, redis, args, query});
 };
 
 export const customUncacheAction = async ({
   redis,
-  options: {args: xArgs, query},
+  options: {args, query},
+  config,
 }: ActionParams) => {
-  const args = {
-    ...xArgs,
-  };
+  const {onError} = config;
 
-  args.uncache = undefined;
+  try {
+    const {uncacheKeys, hasPattern} = args.uncache as unknown as UncacheOptions;
 
-  const {uncacheKeys, hasPattern} = xArgs.uncache as unknown as UncacheOptions;
+    if (hasPattern) {
+      const patternKeys = micromatch(uncacheKeys, ['*\\**', '*\\?*']);
+      const plainKeys = micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']);
 
-  if (hasPattern) {
-    const patternKeys = micromatch(uncacheKeys, ['*\\**', '*\\?*']);
-    const plainKeys = micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']);
+      const unlinkPromises = [
+        ...unlinkPatterns({
+          redis,
+          patterns: patternKeys,
+        }),
+        ...(plainKeys.length ? [redis.unlink(plainKeys)] : []),
+      ];
 
-    const unlinkPromises = [
-      ...unlinkPatterns({
-        redis,
-        patterns: patternKeys,
-      }),
-      ...(plainKeys.length ? [redis.unlink(plainKeys)] : []),
-    ];
-
-    await Promise.all(unlinkPromises);
-  } else {
-    await redis.unlink(uncacheKeys);
+      await Promise.all(unlinkPromises);
+    } else {
+      await redis.unlink(uncacheKeys);
+    }
+  } catch (error) {
+    if (onError) onError(error);
   }
 
-  return query(args);
+  return query({...args, uncache: undefined});
 };
 
 export const isAutoCacheEnabled = ({
   auto,
   options: {args: xArgs, model, operation},
 }: ActionCheckParams) => {
+  if (typeof xArgs.cache === 'object') return false;
+
   if (xArgs.cache !== undefined && typeof xArgs.cache === 'boolean')
     return xArgs.cache;
   if (auto) {

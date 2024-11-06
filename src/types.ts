@@ -4,8 +4,7 @@ import type {
   ModelQueryOptionsCbArgs,
   Operation,
 } from '@prisma/client/runtime/library';
-import type {Cache, createCache} from 'async-cache-dedupe';
-import type {Redis} from 'ioredis';
+import type {Redis, RedisOptions} from 'iovalkey';
 
 import type {CacheCase} from './cacheKey';
 
@@ -102,7 +101,7 @@ export const UNCACHE_OPERATIONS = [
   ...UNCACHE_OPTIONAL_ARG_OPERATIONS,
 ] as const;
 
-export interface CacheOptions {
+export interface CacheOptionsWithStale {
   /**
    * Key for caching
    */
@@ -113,7 +112,34 @@ export interface CacheOptions {
    * If undefined, key stays in cache till uncached
    */
   ttl?: number;
+
+  /**
+   * Custom stale value.
+   * Stale cannot be set without ttl
+   */
+  stale?: never;
 }
+
+export interface CacheOptionsWithoutStale {
+  /**
+   * Key for caching
+   */
+  key: string;
+
+  /**
+   * Custom time-to-live (ttl) value.
+   * If undefined, key stays in cache till uncached
+   */
+  ttl: number;
+
+  /**
+   * Custom stale value.
+   * If undefined, stale is zero
+   */
+  stale?: number;
+}
+
+export type CacheOptions = CacheOptionsWithStale | CacheOptionsWithoutStale;
 
 export interface UncacheOptions {
   /**
@@ -219,9 +245,59 @@ export interface CacheDefinitionOptions {
 }
 
 export type CacheType = 'JSON' | 'STRING';
+export type CacheKeyType = 'INBUILT' | 'CUSTOM';
 
-export type CacheConfig = NonNullable<Parameters<typeof createCache>[0]> & {
-  type?: CacheType;
+export type CacheKey = {
+  /**
+   * Cache key delimiter (default value: ':')
+   */
+  delimiter: string;
+
+  /**
+   * Use CacheCase to set how the generated INBUILT type keys are formatted (default value: CacheCase.CAMEL_CASE)
+   */
+  case: CacheCase;
+
+  /**
+   * AutoCache key prefix (default value: 'prisma')
+   */
+  prefix?: string;
+};
+
+interface LoggerInput {
+  msg: string;
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  [key: string]: any;
+}
+interface Logger {
+  debug: (input: LoggerInput) => void;
+  warn: (input: LoggerInput) => void;
+  error: (input: LoggerInput) => void;
+}
+
+export type CacheConfig = {
+  auto: AutoCacheConfig;
+  type: CacheType;
+  cacheKey: CacheKey;
+  /**
+   * Default time-to-live (ttl) value
+   */
+  ttl: number;
+  /**
+   * Default stale time after ttl
+   */
+  stale: number;
+  transformer?: {
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    serialize: (data: any) => any;
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    deserialize: (data: any) => any;
+  };
+  logger?: Logger;
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+  onError?: (error: any) => void;
+  onHit?: (key: string) => void;
+  onMiss?: (key: string) => void;
 };
 
 export interface ModelConfig {
@@ -238,12 +314,12 @@ export interface ModelConfig {
   /**
    * Auto - stale time after ttl
    */
-  stale?: number | ((result: unknown) => number);
+  stale?: number;
 
   /**
    * Model specific time-to-live (ttl) value
    */
-  ttl?: number | ((result: unknown) => number);
+  ttl?: number;
 }
 
 export type AutoCacheConfig =
@@ -266,42 +342,26 @@ export type AutoCacheConfig =
       /**
        * Auto stale time after ttl
        */
-      stale?: number | ((result: unknown) => number);
+      stale?: number;
 
       /**
        * Auto time-to-live (ttl) value
        */
-      ttl?: number | ((result: unknown) => number);
+      ttl?: number;
     }
   | boolean;
 
-export interface ExtensionAutoCacheConfig {
+export interface PrismaExtensionRedisOptions {
   /**
-   * Auto cache config
+   * Cache config
    */
-  auto?: AutoCacheConfig;
+  config: CacheConfig;
 
   /**
-   * async-cache-dedupe config
+   * Redis client config (iovalkey)
    */
-  cache: CacheConfig;
-
-  /**
-   * Redis client
-   */
-  redis: Redis;
+  client: RedisOptions;
 }
-
-export interface ExtensionCacheUncacheConfig {
-  /**
-   * Redis client
-   */
-  redis: Redis;
-}
-
-export type PrismaExtensionRedisConfig =
-  | ExtensionAutoCacheConfig
-  | ExtensionCacheUncacheConfig;
 
 export type DeletePatterns = {
   /**
@@ -317,11 +377,6 @@ export type DeletePatterns = {
 
 export type ActionParams = {
   /**
-   * async-cache-dedupe client
-   */
-  cache?: Cache;
-
-  /**
    * Model query options
    */
   options: ModelQueryOptionsCbArgs;
@@ -332,14 +387,19 @@ export type ActionParams = {
   redis: Redis;
 
   /**
+   * CacheConfig
+   */
+  config: CacheConfig;
+
+  /**
    * Auto stale time after ttl
    */
-  stale?: number | ((result: unknown) => number);
+  stale?: number;
 
   /**
    * Auto time-to-live (ttl) value
    */
-  ttl?: number | ((result: unknown) => number);
+  ttl?: number;
 };
 
 export type ActionCheckParams = {
@@ -354,6 +414,63 @@ export type ActionCheckParams = {
   options: ModelQueryOptionsCbArgs;
 };
 
-export type CacheKeyParams = Record<string, string>[];
+export type GetDataParams = {
+  ttl: number;
+  stale: number;
+  config: CacheConfig;
+  key: string;
+  redis: Redis;
+  args: JsArgs;
+  query: (args: JsArgs) => Promise<unknown>;
+};
 
-export type CacheKeyPatternParams = Record<string, string>[];
+export type CacheKeyParams = {
+  /**
+   * Key params to generate key
+   */
+  params: Record<string, string>[];
+
+  /**
+   * Model name
+   */
+  model?: string;
+
+  /**
+   * Operation name
+   */
+  operation?: Operation;
+};
+
+export type CacheAutoKeyParams = {
+  /**
+   * Query args
+   */
+  args: JsArgs;
+
+  /**
+   * Model name
+   */
+  model: string;
+
+  /**
+   * Operation name
+   */
+  operation: Operation;
+};
+
+export type CacheKeyPatternParams = {
+  /**
+   * Key params to generate key
+   */
+  params: Record<string, string>[];
+
+  /**
+   * Model name
+   */
+  model?: string;
+
+  /**
+   * Operation name
+   */
+  operation?: Operation;
+};

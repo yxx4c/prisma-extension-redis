@@ -6,4 +6,4 @@ export type {
   UncacheOptions,
 } from './types';
 export {filterOperations, unlinkPatterns} from './cacheUncache';
-export {CacheCase, getCacheKey, getCacheKeyPattern} from './cacheKey';
+export {CacheCase} from './cacheKey';

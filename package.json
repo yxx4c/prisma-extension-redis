@@ -1,6 +1,6 @@
 {
   "name": "prisma-extension-redis",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "Extensive Prisma extension designed for efficient caching and cache invalidation using Redis and Dragonfly Databases",
   "repository": {
     "type": "git",
@@ -38,7 +38,11 @@
   "typesVersions": {
     "*": {}
   },
-  "files": ["dist/**/*", "LICENSE", "README.md"],
+  "files": [
+    "dist/**/*",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -69,7 +73,9 @@
     "access": "public"
   },
   "release": {
-    "branches": ["main"],
+    "branches": [
+      "main"
+    ],
     "plugins": [
       [
         "@semantic-release/commit-analyzer",
@@ -117,9 +123,9 @@
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
-    "async-cache-dedupe": "^2.2.0",
-    "ioredis": "^5.4.1",
+    "iovalkey": "^0.2.1",
     "lodash-es": "^4.17.21",
-    "micromatch": "^4.0.7"
+    "micromatch": "^4.0.7",
+    "object-code": "^1.3.3"
   }
 }

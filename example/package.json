@@ -11,7 +11,7 @@
     "@prisma/client": "5.18.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.33.0",
-    "ioredis": "^5.4.1",
+    "iovalkey": "^0.2.1",
     "pino": "^9.3.2",
     "prisma": "5.18.0",
     "prisma-extension-redis": "link:prisma-extension-redis",
