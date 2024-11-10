@@ -8,7 +8,6 @@ import {
   type ActionCheckParams,
   type ActionParams,
   CACHE_OPERATIONS,
-  type CacheConfig,
   type CacheOptions,
   type CacheType,
   type DeletePatterns,
@@ -17,7 +16,7 @@ import {
   type UncacheOptions,
   type autoOperations,
 } from './types';
-import type {getAutoKeyGen, getKeyGen} from './cacheKey';
+import type {getAutoKeyGen} from './cacheKey';
 
 export const filterOperations =
   <T extends Operation[]>(...ops: T) =>
@@ -172,15 +171,19 @@ export const autoCacheAction = async (
 
   const {query, args, model, operation} = options;
 
-  let stale = 0;
-  let ttl = 0;
+  const isAutoObject = typeof auto === 'object';
 
-  if (typeof auto === 'object') {
-    const modelConfig = auto.models?.find(m => m.model === model);
-    ttl =
-      modelConfig?.ttl ?? auto.ttl ?? config.ttl ?? Number.POSITIVE_INFINITY;
-    stale = modelConfig?.stale ?? auto.stale ?? config.stale ?? 0;
-  }
+  const modelConfig = isAutoObject
+    ? auto.models?.find(m => m.model === model)
+    : null;
+
+  const ttl = isAutoObject
+    ? (modelConfig?.ttl ?? auto.ttl ?? config.ttl)
+    : config.ttl;
+
+  const stale = isAutoObject
+    ? (modelConfig?.stale ?? auto.stale ?? config.stale)
+    : config.stale;
 
   const key = getAutoKey({args, model, operation: operation as Operation});
 
