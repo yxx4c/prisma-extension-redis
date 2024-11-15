@@ -38,34 +38,26 @@
   "typesVersions": {
     "*": {}
   },
-  "files": [
-    "dist/**/*",
-    "LICENSE",
-    "README.md"
-  ],
+  "files": ["dist/**/*", "LICENSE", "README.md"],
   "scripts": {
     "build": "tsup",
+    "biome": "biome",
     "dev": "tsup --watch",
-    "format": "prettier --write .",
-    "semantic-release": "semantic-release",
+    "format": "biome format",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "gts lint",
-    "clean": "gts clean",
+    "lint": "biome lint",
+    "clean": "biome clean",
     "compile": "tsc",
-    "fix": "gts fix",
-    "prepare": "npm run compile",
-    "pretest": "npm run compile",
-    "posttest": "npm run lint"
+    "fix": "biome format --fix",
+    "prepare": "bun run compile",
+    "pretest": "bun run compile",
+    "posttest": "bun run lint"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/lodash-es": "^4.17.12",
     "@types/micromatch": "^4.0.9",
     "@types/node": "^20.16.1",
-    "conventional-changelog-conventionalcommits": "^7.0.2",
-    "gts": "^5.3.1",
-    "prettier": "^3.3.3",
-    "semantic-release": "^23.1.1",
     "tsup": "^8.2.4",
     "typescript": "^5.5.4"
   },
@@ -73,53 +65,7 @@
     "access": "public"
   },
   "release": {
-    "branches": [
-      "main"
-    ],
-    "plugins": [
-      [
-        "@semantic-release/commit-analyzer",
-        {
-          "preset": "conventionalcommits",
-          "releaseRules": [
-            {
-              "type": "build",
-              "scope": "deps",
-              "release": "patch"
-            }
-          ]
-        }
-      ],
-      [
-        "@semantic-release/release-notes-generator",
-        {
-          "preset": "conventionalcommits",
-          "presetConfig": {
-            "types": [
-              {
-                "type": "feat",
-                "section": "Features"
-              },
-              {
-                "type": "fix",
-                "section": "Bug Fixes"
-              },
-              {
-                "type": "docs",
-                "section": "Documentation Changes"
-              },
-              {
-                "type": "build",
-                "section": "Dependencies and Other Build Updates",
-                "hidden": false
-              }
-            ]
-          }
-        }
-      ],
-      "@semantic-release/npm",
-      "@semantic-release/github"
-    ]
+    "branches": ["main"]
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
