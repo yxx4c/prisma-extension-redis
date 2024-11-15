@@ -163,7 +163,7 @@ extendedPrisma.user.findUnique({
 
 // Disable cache for specific query
 extendedPrisma.user.findFirst({
-  where: { userId },
+  where: { id: userId },
   cache: false, // Toggle caching off
 });
 ```
@@ -180,7 +180,7 @@ For greater control over caching, generate custom cache keys and TTL settings.
 **Example with Custom Cache Key:**
 
 ```javascript
-const customKey = extendedPrisma.getKey({ params: [{ prisma: 'User' }, { userId }] });
+const customKey = extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] });
 
 extendedPrisma.user.findUnique({
   where: { id: userId },
@@ -201,9 +201,9 @@ extendedPrisma.user.update({
   data: { username: newUsername },
   uncache: {
     uncacheKeys: [
-      extendedPrisma.getKey({ params: [{ prisma: 'User' }, { userId }] }), // Specific key to invalidate
-      getKeyPattern({ params: [{ prisma: '*' }, { userId }]}), // Pattern for wildcard invalidation
-      getKeyPattern({ params: [{ prisma: 'Post' }, { userId }, { glob: '*' }]}), // Use glob for more complex patterns
+      extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] }), // Specific key to invalidate
+      getKeyPattern({ params: [{ prisma: '*' }, { id: userId }]}), // Pattern for wildcard invalidation
+      getKeyPattern({ params: [{ prisma: 'Post' }, { id: userId }, { glob: '*' }]}), // Use glob for more complex patterns
     ],
     hasPattern: true, // Use pattern matching for invalidation
   },
