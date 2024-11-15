@@ -1,6 +1,7 @@
 import {PrismaClient} from '@prisma/client';
 import pino from 'pino';
 import {
+  type AutoCacheConfig,
   CacheCase,
   type CacheConfig,
   PrismaExtensionRedis,
@@ -20,22 +21,24 @@ const client = {
 // Create a pino logger instance for logging
 const logger = pino();
 
+const auto: AutoCacheConfig = {
+  excludedModels: ['Post'], // Models to exclude from auto-caching default behavior
+  excludedOperations: ['findFirst', 'count', 'findMany'], // Operations to exclude from auto-caching default behavior
+  models: [
+    {
+      model: 'User',
+      excludedOperations: [],
+      ttl: 120, // Time-to-live for caching in seconds
+      stale: 30, // Stale time for caching in seconds
+    },
+  ], // main auto-cache configuration for specific models
+  ttl: 30, // Default time-to-live for auto-caching
+};
+
 const config: CacheConfig = {
   ttl: 60, // Default Time-to-live for caching in seconds
   stale: 30, // Default Stale time after ttl in seconds
-  auto: {
-    excludedModels: ['Post'], // Models to exclude from auto-caching default behavior
-    excludedOperations: ['findFirst', 'count', 'findMany'], // Operations to exclude from auto-caching default behavior
-    models: [
-      {
-        model: 'User',
-        excludedOperations: [],
-        ttl: 120, // Time-to-live for caching in seconds
-        stale: 30, // Stale time for caching in seconds
-      },
-    ], // main auto-cache configuration for specific models
-    ttl: 30, // Default time-to-live for auto-caching
-  },
+  auto,
   logger, // Logger for cache events
   transformer: {
     // Use, main serialize and deserialize function for additional functionality if required
@@ -199,7 +202,7 @@ const main = async () => {
       .then(user =>
         logger.info({type: 'AUTO: CACHE: WITH KEY: Find userOne', user}),
       );
-  }, 5000);
+  }, 200000);
 };
 
 main()
