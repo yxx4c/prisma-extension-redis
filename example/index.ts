@@ -1,12 +1,10 @@
 import {PrismaClient} from '@prisma/client';
-import {Redis} from 'ioredis';
 import pino from 'pino';
 import {
   type AutoCacheConfig,
+  CacheCase,
   type CacheConfig,
   PrismaExtensionRedis,
-  getCacheKey,
-  getCacheKeyPattern,
 } from 'prisma-extension-redis';
 import {SuperJSON} from 'superjson';
 
@@ -15,10 +13,10 @@ import env from './env';
 import {getRandomValue} from './utils';
 
 // Create a Redis client
-const redis = new Redis({
+const client = {
   host: env.REDIS_HOST_NAME, // Specify Redis host name
   port: env.REDIS_PORT, // Specify Redis port
-});
+};
 
 // Create a pino logger instance for logging
 const logger = pino();
@@ -30,44 +28,40 @@ const auto: AutoCacheConfig = {
     {
       model: 'User',
       excludedOperations: [],
-      ttl: 600, // Time-to-live for caching in seconds
-      stale: 600, // Stale time for caching in seconds
+      ttl: 120, // Time-to-live for caching in seconds
+      stale: 30, // Stale time for caching in seconds
     },
-  ], // Custom auto-cache configuration for specific models
-  ttl: 1, // Default time-to-live for caching
+  ], // main auto-cache configuration for specific models
+  ttl: 30, // Default time-to-live for auto-caching
 };
 
-const cache: CacheConfig = {
-  ttl: 1, // Time-to-live for caching in seconds
-  stale: 1, // Stale time for caching in seconds
-  storage: {
-    type: 'redis',
-    options: {
-      client: redis,
-      // Invalidation settings
-      // referencesTTL is in seconds
-      // The min value of referencesTTL must be more than max value of all TTLs used
-      invalidation: {referencesTTL: 60},
-      log: logger, // Logger for cache events
-    },
-  }, // Storage configuration for async-cache-dedupe
+const config: CacheConfig = {
+  ttl: 60, // Default Time-to-live for caching in seconds
+  stale: 30, // Default Stale time after ttl in seconds
+  auto,
+  logger, // Logger for cache events
   transformer: {
-    // Use, custom serialize and deserialize function for additional functionality if required
+    // Use, main serialize and deserialize function for additional functionality if required
     deserialize: data => SuperJSON.parse(data), // default value of deserialize function
     serialize: data => SuperJSON.stringify(data), // default value of serialize function
   },
   onHit: (key: string) => console.log(`FOUND CACHE: ${key}`),
   onMiss: (key: string) => console.log(`NOT FOUND CACHE: ${key}`),
-  type: 'STRING',
+  type: 'JSON',
+  cacheKey: {
+    case: CacheCase.SNAKE_CASE,
+    delimiter: '*',
+    prefix: 'awesomeness',
+  },
 };
 
-const client = new PrismaClient();
-const prisma = client.$extends(PrismaExtensionRedis({cache, redis}));
+const prisma = new PrismaClient();
+const extendedPrisma = prisma.$extends(PrismaExtensionRedis({config, client}));
 
 const main = async () => {
   await Promise.all(
     users.map(user =>
-      prisma.user.upsert({
+      extendedPrisma.user.upsert({
         where: {
           email: user.email,
         },
@@ -79,29 +73,42 @@ const main = async () => {
         update: {},
         // at the moment you cannot cache during upsert, uncache works normal, as below!
         uncache: {
-          uncacheKeys: ['*'], // DANGEROUS OPERATION - DELETES EVERYTHING FROM CACHE
+          uncacheKeys: ['*'], // USING WILDCARD '*' - DANGEROUS OPERATION - DELETES EVERYTHING FROM CACHE
           hasPattern: true,
         },
       }),
     ),
   );
 
-  const userOne = getRandomValue(users);
+  const usedUsers: number[] = [];
 
-  await prisma.user
+  const userOne = getRandomValue(users);
+  usedUsers.push(userOne.id);
+
+  await extendedPrisma.user
+    .findUnique({
+      where: {email: userOne.email},
+    })
+    .then(user => logger.info({type: 'AUTO: DATABASE: Find userOne', user}));
+
+  await extendedPrisma.user
     .findUnique({
       where: {email: userOne.email},
       cache: {
-        key: getCacheKey([{prisma: 'User'}, {email: userOne.email}]),
+        key: extendedPrisma.getKey({
+          params: [{prisma: 'User'}, {email: userOne.email}],
+        }),
       },
     })
     .then(user => logger.info({type: 'DATABASE: Find userOne', user}));
 
-  await prisma.user
+  await extendedPrisma.user
     .findUnique({
       where: {email: userOne.email},
       cache: {
-        key: getCacheKey([{prisma: 'User'}, {email: userOne.email}]),
+        key: extendedPrisma.getKey({
+          params: [{prisma: 'User'}, {email: userOne.email}],
+        }),
       },
     })
     .then(user =>
@@ -112,44 +119,55 @@ const main = async () => {
       }),
     );
 
-  await prisma.user
+  await extendedPrisma.user
     .delete({
       where: {id: userOne.id},
       uncache: {
-        uncacheKeys: [getCacheKey([{prisma: 'User'}, {email: userOne.email}])],
+        uncacheKeys: [
+          extendedPrisma.getKey({
+            params: [{prisma: 'User'}, {email: userOne.email}],
+          }),
+        ],
       },
     })
     .then(deleted => logger.info({type: 'DATABASE: Deleted userOne', deleted}));
 
-  const userTwo = getRandomValue(users.filter(u => u.id !== userOne.id));
+  const userTwo = getRandomValue(users.filter(u => !usedUsers.includes(u.id)));
+  usedUsers.push(userTwo.id);
 
-  await prisma.user
+  await extendedPrisma.user
     .update({
       where: {email: userTwo.email},
       data: {name: userOne.name},
       uncache: {
         uncacheKeys: [
-          getCacheKey([{prisma: 'User'}, {email: userTwo.email}]),
+          extendedPrisma.getKey({
+            params: [{prisma: 'User'}, {email: userOne.email}],
+          }),
         ],
       },
     })
     .then(updated => logger.info({type: 'DATABASE: Update userTwo', updated}));
 
-  await prisma.user
+  await extendedPrisma.user
     .findUnique({
       where: {email: userTwo.email},
       cache: {
-        key: getCacheKey([{prisma: 'User'}, {email: userTwo.email}]),
+        key: extendedPrisma.getKey({
+          params: [{prisma: 'User'}, {email: userOne.email}],
+        }),
         ttl: 60,
       },
     })
     .then(user => logger.info({type: 'DATABASE: Find userTwo', user}));
 
-  await prisma.user
+  await extendedPrisma.user
     .findUnique({
       where: {email: userTwo.email},
       cache: {
-        key: getCacheKey([{prisma: 'User'}, {email: userTwo.email}]),
+        key: extendedPrisma.getKey({
+          params: [{prisma: 'User'}, {email: userOne.email}],
+        }),
         ttl: 60,
       },
     })
@@ -160,6 +178,31 @@ const main = async () => {
         user: {...user, createdAt: user?.createdAt.toLocaleDateString()},
       }),
     );
+
+  setTimeout(async () => {
+    await extendedPrisma.user
+      .findUnique({
+        where: {email: userOne.email},
+      })
+      .then(user => logger.info({type: 'AUTO: CACHE: Find userOne', user}));
+
+    const args = {where: {email: userOne.email}};
+
+    await extendedPrisma.user
+      .findUnique({
+        ...args,
+        cache: {
+          key: extendedPrisma.getAutoKey({
+            args,
+            model: 'user',
+            operation: 'count',
+          }),
+        },
+      })
+      .then(user =>
+        logger.info({type: 'AUTO: CACHE: WITH KEY: Find userOne', user}),
+      );
+  }, 200000);
 };
 
 main()

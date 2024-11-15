@@ -1,5 +1,5 @@
 {
   "watch": ["src", "example"],
   "ext": "ts",
-  "exec": "pnpm build && bun link && cd example && rm -rf prisma/migrations && rm -f prisma/sqlite.db &&  bun install && bunx prisma generate && bunx prisma migrate dev --name init && bun index.ts"
+  "exec": "rm -rf node_modules dist && bun install && bun run build && bun link && cd example && rm -rf prisma/migrations && rm -f prisma/sqlite.db &&  bun install && bunx prisma generate && bunx prisma migrate dev --name init && bun index.ts"
 }

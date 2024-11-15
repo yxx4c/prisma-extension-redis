@@ -1,10 +1,19 @@
-# prisma-extension-redis
 
-The `prisma-extension-redis` library is a comprehensive package that provides a unified solution for optimizing database access times, enhancing cache management, and offering versatile functions for efficient Redis/Dragonfly database maintenance.
+# Prisma Extension Redis
+
+![NPM License](https://img.shields.io/npm/l/prisma-extension-redis)
+![NPM Version](https://img.shields.io/npm/v/prisma-extension-redis)
+![NPM Downloads](https://img.shields.io/npm/dw/prisma-extension-redis)
+
+`prisma-extension-redis` provides seamless integration with Prisma and Redis/Dragonfly databases, offering efficient caching mechanisms to improve data access times and overall application performance.
 
 🚀 If `prisma-extension-redis` proves helpful, consider giving it a star! [⭐ Star Me!](https://github.com/yxx4c/prisma-extension-redis)
 
-## **Installation**
+---
+
+## Installation
+
+You can install `prisma-extension-redis` using your preferred package manager:
 
 **Using npm:**
 
@@ -30,161 +39,229 @@ pnpm add prisma-extension-redis
 bun add prisma-extension-redis
 ```
 
-## Initialization of setup
+---
+
+## Setup and Configuration
+
+### Step 1: Initialize Required Clients
+
+Before setting up caching, initialize your Prisma client, Redis client config, and logger:
 
 ```javascript
-import {PrismaClient} from '@prisma/client';
-import {Redis} from 'ioredis';
 import pino from 'pino';
+import { PrismaClient } from '@prisma/client';
+import { Redis } from 'iovalkey';
+import {SuperJSON} from 'superjson';
+
 import {
-  getCacheKey,
-  getCacheKeyPattern,
+  CacheCase,
   PrismaExtensionRedis,
+  type AutoCacheConfig,
+  type CacheConfig,
 } from 'prisma-extension-redis';
 
-// Create a Redis client
-const redis = new Redis({
-  host: env.REDIS_HOST_NAME, // Specify Redis host name
-  port: env.REDIS_PORT, // Specify Redis port
-});
 
-// Create a pino logger instance for logging
+// Prisma Client
+const prisma = new PrismaClient();
+
+// Redis client config
+const client = {
+  host: process.env.REDIS_HOST_NAME, // Redis host
+  port: process.env.REDIS_PORT,      // Redis port
+};
+
+// Create a logger using pino (optional)
 const logger = pino();
 ```
 
-### Auto cache config
+### Step 2: Configure Auto-Cache Settings
 
-Auto-caching can be enabled for all read operations by default. Set `auto` to customize behavior or exclude specific models or operations.
+`auto` settings enable automated caching for read operations with flexible customization.
+
+#### Example Auto-Cache Configuration
 
 ```javascript
-const auto = {
-  excludedModels: ['Post'], // Models to exclude from auto-caching default behavior
-  excludedOperations: ['findFirst', 'count', 'findMany'], // Operations to exclude from auto-caching default behavior
+const auto: AutoCacheConfig = {
+  excludedModels: ['Post'], // Models excluded from auto-caching
+  excludedOperations: ['findFirst', 'count', 'findMany'], // Operations excluded from auto-caching
   models: [
     {
-      model: 'User',
-      excludedOperations: [],
-      ttl: 10, // Time-to-live for caching
-      stale: 5, // Stale time for caching
+      model: 'User', // Model-specific auto-cache settings
+      excludedOperations: ['count'], // Operations to exclude
+      ttl: 10,  // Time-to-live (TTL) for cache in seconds
+      stale: 5, // Stale time in seconds
     },
-  ], // Custom auto-cache configuration for specific models
-  ttl: 1, // Default time-to-live for caching
+  ],
+  ttl: 30, // Default TTL for cache in seconds
 };
 ```
 
-_Cache Client Config is **required** to enable auto-cache._
+**Note**:
 
-### Cache Client Config
+ 1. Excluded operations and models will not benefit from auto-caching.
+ 2. Use `ttl` and `stale` values to define caching duration.
 
-This configuration is required for enabling auto-cache and handling caching using `cache: true` or `cache: false` per Prisma query (refer use cases).
+### Step 3: Configure Cache Client
+
+The cache client configuration is necessary to enable caching, either automatically or manually.
+
+#### Example Cache Configuration
 
 ```javascript
-const cache = {
-  ttl: 1, // Time-to-live for caching
-  stale: 1, // Stale time for caching
-  storage: {
-    type: 'redis',
-    options: {
-      client: redis,
-      invalidation: {referencesTTL: 60}, // Invalidation settings
-      log: logger, // Logger for cache events
-    },
-  }, // Storage configuration for async-cache-dedupe
-  type: 'STRING' // Type of Redis.* cache to use(Default: JSON, supported: JSON | STRING)
+const config: CacheConfig = {
+ ttl: 60, // Default Time-to-live for caching in seconds
+  stale: 30, // Default Stale time after ttl in seconds
+  auto, // Auto-caching options (configured above)
+  logger, // Logger for cache events (configured above)
+  transformer: {
+    // Custom serialize and deserialize function for additional functionality if required
+    deserialize: data => SuperJSON.parse(data),
+    serialize: data => SuperJSON.stringify(data),
+  },
+  type: 'JSON', // Redis cache type, whether you prefer the data to be stored as JSON or STRING in Redis
+  cacheKey: { // Inbuilt cache key configuration
+    case: CacheCase.SNAKE_CASE, // Select a cache case conversion option for generated keys from CacheCase
+    delimiter: '*', // Delimiter for keys (default value: ':')
+    prefix: 'awesomeness', // Cache key prefix (default value: 'prisma')
+  },
 };
 ```
 
-### Create Prisma Extended Client
+**Note**: Cache case conversion strips all non alpha numeric characters
+
+### Step 4: Extend Prisma Client
+
+Now, extend your Prisma client with caching capabilities using `prisma-extension-redis`:
 
 ```javascript
-// Create a Prisma client instance
-const prisma = new PrismaClient();
-
-// Extend Prisma with prisma-extension-redis
 const extendedPrisma = prisma.$extends(
-  PrismaExtensionRedis({auto, cache, redis})
+  PrismaExtensionRedis({ config, client })
 );
 ```
 
-### Use case 1: Default Auto-Caching Configuration
+---
+
+## Usage Guide
+
+### Automatic Caching
+
+With auto-caching, read operations (e.g., `findUnique`, `findMany`) are cached automatically based on the defined configuration.
+
+**Basic Example:**
 
 ```javascript
-// Example: Query a user and cache the result when auto caching is enabled
+// Cached automatically based on auto-cache settings
 extendedPrisma.user.findUnique({
-  where: {id},
+  where: { id: userId },
 });
 
-// Example: Query a user and cache the result by setting `cache: true` to toggle auto cache
+// Manually enable cache for a query
 extendedPrisma.user.findUnique({
-  where: {id},
-  cache: true, // Enable caching with default configuration
+  where: { id: userId },
+  cache: true, // Toggle caching on
 });
 
-// Example: Exclude automatic caching for a specific operation
+// Disable cache for specific query
 extendedPrisma.user.findFirst({
-  where: {userId: id},
-  cache: false, // Disable caching for this operation
+  where: { id: userId },
+  cache: false, // Toggle caching off
 });
 ```
 
-### Use case 2: Selective Caching with Custom Configuration
+**Note**:
+
+1. If `auto-cache` is set to `false` and `cache` is set to `true` for the query, the default values from the cache configuration will be applied.
+2. If `cache` is set to `false` and `auto-cache` is set to `true`, the query will not be cached.
+
+### Custom Caching with `getKey`
+
+For greater control over caching, generate custom cache keys and TTL settings.
+
+**Example with Custom Cache Key:**
 
 ```javascript
-// Example: Query a user and cache the result - with custom configuration
+const customKey = extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] });
+
 extendedPrisma.user.findUnique({
-  where: {id},
-  cache: {ttl: 5, key: getCacheKey([{prisma: 'User'}, {userId: id}])},
+  where: { id: userId },
+  cache: { ttl: 5, key: customKey }, // Custom TTL and cache key
 });
 ```
 
-### Use case 3: Invalidation of Cached Data
+### Cache Invalidation
+
+Cache invalidation ensures data consistency by removing or updating cached data when changes occur in the database.
+
+**Example of Cache Invalidation:**
 
 ```javascript
-// Example: Update a user and invalidate related cache keys
+// Invalidate cache when updating a user's information
 extendedPrisma.user.update({
-  where: {id},
-  data: {username},
+  where: { id: userId },
+  data: { username: newUsername },
   uncache: {
     uncacheKeys: [
-      getCacheKey([{prisma: 'User'}, {userId: id}]),
-      getCacheKeyPattern([{prisma: '*'}, {userId: id}]), // Pattern matching under a specific key, eg: prisma:*:userId:1234
-      getCacheKeyPattern([{prisma: 'Post'}, {userId: id}, {glob: '*'}]), // Utilizing the key 'glob' to create a wildcard region, eg: prisma:post:userId:1234:*
-    ], // Keys to be invalidated
-    hasPattern: true, // Use wildcard pattern for key matching
+      extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] }), // Specific key to invalidate
+      getKeyPattern({ params: [{ prisma: '*' }, { id: userId }]}), // Pattern for wildcard invalidation
+      getKeyPattern({ params: [{ prisma: 'Post' }, { id: userId }, { glob: '*' }]}), // Use glob for more complex patterns
+    ],
+    hasPattern: true, // Use pattern matching for invalidation
   },
 });
 ```
 
-_Custom cache invalidation is designed for custom caching (not auto-caching)._
+**Explanation of Cache Invalidation:**
 
-## Additional Information
-
-- All durations must be specified in seconds (Time-to-Live, Stale Time, ReferenceTTL).
-- Any configuration for auto-cache exclusion will result in the query being omitted from auto-cache during execution.
-
-## Prerequisites
-
-- `Redis.JSON` must be enabled in your Redis instance (this is enabled by default in Dragonfly).
-
-## Dependencies
-
-- `ioredis`
-
-## Key Features
-
-- **Automatic Query Result Caching:** Easily cache Prisma query results in Redis with minimal configuration.
-- **Selective Cache Invalidation:** Invalidate specific Prisma queries to ensure accurate and up-to-date data retrieval.
-- **Fine-grained Control:** Configure caching and invalidation settings on a per-query basis for granular control over caching behavior.
-- **Cache Invalidation Strategies:** Implement cache invalidation strategies to ensure that cached data remains up-to-date.
-- **Versatile Functions:** Utilize general-purpose functions for efficient Redis/Dragonfly database maintenance.
+- **`uncacheKeys`**: Specifies the keys or patterns to be invalidated.
+- **`hasPattern`**: Indicates if wildcard patterns are used for key matching.
 
 ---
 
-**Why use prisma-extension-redis?**
+## Key Concepts Explained
 
-- **Simplified Dependencies:** Instead of managing multiple packages, you now only need `prisma-extension-redis` for all the features.
-- **Enhanced Maintenance:** Centralized updates and improvements for all functionalities, leading to easier maintenance.
-- **Streamlined Codebase:** Consolidate your codebase by eliminating redundant dependencies and optimizing performance.
-- **Community Focus:** Join the community around `prisma-extension-redis` for collective support and collaborative development.
+### 1. **Time-to-Live (TTL)**
 
-Upgrade to `prisma-extension-redis` today to experience a more streamlined and efficient Redis caching solution.
+- Specifies how long (in seconds) a cached entry should remain before expiring.
+- **Default TTL**: Used when no specific TTL is provided for a query.
+
+### 2. **Stale Time**
+
+- After the TTL expires, stale time defines how long expired data can still be used while refreshing data in the background.
+- This ensures that users experience minimal latency even when data is being updated.
+
+### 3. **Cache Key Management**
+
+- **`getKey`**: Generates a unique key for caching queries from provided key context parameters.
+- **`getAutoKey`**: Generates a unique key for auto-caching queries, based on query parameters.
+- **`getKeyPattern`**: Creates patterns for more complex invalidation scenarios, using wildcards.
+
+---
+
+## Key Features
+
+- **Auto-Caching**: Automatically cache read operations, reducing redundant queries and improving performance.
+- **Selective Caching**: Customize which queries to cache, how long to cache them, and whether to cache them at all.
+- **Efficient Invalidation**: Keep cached data up-to-date by selectively invalidating caches when updates or deletions occur.
+- **Granular Control**: Easily toggle caching on or off for individual queries as needed.
+- **Logger Support**: Integrate logging to monitor cache hits, misses, and invalidations for easier debugging and optimization.
+
+---
+
+## Prerequisites
+
+- Ensure you have a running Redis or Dragonfly instance. If using Redis, `Redis.JSON` must be enabled to use JSON type cache (by default, it is enabled in Dragonfly).
+
+## Dependencies
+
+- `iovalkey` package is used for Redis connectivity.
+- `micromatch` is used for patter matching for keys.
+- `object-code` is used for generating unique hash in auto-caching keys.
+- `lodash-es` is used for CacheCase logic in key management.
+
+---
+
+## Final Thoughts
+
+`prisma-extension-redis` offers an efficient and powerful way to manage caching in Prisma-based applications. By leveraging both automatic and custom caching, you can optimize your application's performance while maintaining data consistency.
+
+Upgrade to `prisma-extension-redis` for an optimized caching strategy and contribute to its growth by starring the repository if you find it useful!

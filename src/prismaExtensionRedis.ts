@@ -1,6 +1,6 @@
 import {Prisma} from '@prisma/client/extension';
-import {createCache} from 'async-cache-dedupe';
-import type {ExtendedModel, PrismaExtensionRedisConfig} from './types';
+import Redis from 'iovalkey';
+
 import {
   autoCacheAction,
   customCacheAction,
@@ -8,20 +8,34 @@ import {
   isAutoCacheEnabled,
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
-} from './utils';
+} from './cacheUncache';
+import {getAutoKeyGen, getKeyGen, getKeyPatternGen} from './cacheKey';
 
-export const PrismaExtensionRedis = (config: PrismaExtensionRedisConfig) => {
-  const {redis} = config;
+import type {ExtendedModel, PrismaExtensionRedisOptions} from './types';
 
-  const auto = 'auto' in config && 'cache' in config ? config.auto : undefined;
-  const cacheConfig = 'cache' in config ? config.cache : undefined;
-  const cache = cacheConfig ? createCache(cacheConfig) : undefined;
+export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
+  const {
+    config,
+    config: {
+      auto,
+      cacheKey: {delimiter, case: cacheCase, prefix},
+    },
+    client: redisOptions,
+  } = options;
+
+  const redis = new Redis(redisOptions);
+
+  const getKey = getKeyGen(delimiter, cacheCase, prefix);
+  const getAutoKey = getAutoKeyGen(getKey);
+  const getKeyPattern = getKeyPatternGen(delimiter, cacheCase, prefix);
 
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',
     client: {
       redis,
-      cache,
+      getKey,
+      getKeyPattern,
+      getAutoKey,
     },
     model: {
       $allModels: {} as ExtendedModel,
@@ -31,27 +45,29 @@ export const PrismaExtensionRedis = (config: PrismaExtensionRedisConfig) => {
         async $allOperations(options) {
           const {args, query} = options;
 
-          if (isAutoCacheEnabled({auto, options})) {
-            let stale = undefined;
-            let ttl = undefined;
-            if (typeof auto === 'object') {
-              const model = auto.models?.find(m => m.model === options.model);
-              ttl = model?.ttl ?? auto.ttl;
-              stale = model?.stale ?? auto.stale;
-            }
-
-            return autoCacheAction({cache, redis, options, stale, ttl});
-          }
+          if (isAutoCacheEnabled({auto, options}))
+            return autoCacheAction(
+              {
+                redis,
+                options,
+                config,
+              },
+              getAutoKey,
+            );
 
           if (isCustomCacheEnabled({options}))
             return customCacheAction({
               redis,
               options,
-              config: cacheConfig,
+              config,
             });
 
           if (isCustomUncacheEnabled({options}))
-            return customUncacheAction({redis, options});
+            return customUncacheAction({
+              redis,
+              options,
+              config,
+            });
 
           return query(args);
         },
