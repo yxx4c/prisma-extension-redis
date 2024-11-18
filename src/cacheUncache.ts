@@ -157,6 +157,8 @@ export const getCache = async ({
     const value = (transformer?.serialize || JSON.stringify)(cacheContext);
 
     setCache(type, key, value, ttl + stale, redis);
+
+    return result;
   } catch (error) {
     if (onError) onError(error);
     else throw error;
