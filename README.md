@@ -202,8 +202,8 @@ extendedPrisma.user.update({
   uncache: {
     uncacheKeys: [
       extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] }), // Specific key to invalidate
-      getKeyPattern({ params: [{ prisma: '*' }, { id: userId }]}), // Pattern for wildcard invalidation
-      getKeyPattern({ params: [{ prisma: 'Post' }, { id: userId }, { glob: '*' }]}), // Use glob for more complex patterns
+      extendedPrisma.getKeyPattern({ params: [{ prisma: '*' }, { id: userId }]}), // Pattern for wildcard invalidation
+      extendedPrisma.getKeyPattern({ params: [{ prisma: 'Post' }, { id: userId }, { glob: '*' }]}), // Use glob for more complex patterns
     ],
     hasPattern: true, // Use pattern matching for invalidation
   },
