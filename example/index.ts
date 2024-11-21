@@ -47,7 +47,7 @@ const config: CacheConfig = {
   },
   onHit: (key: string) => console.log(`FOUND CACHE: ${key}`),
   onMiss: (key: string) => console.log(`NOT FOUND CACHE: ${key}`),
-  type: 'JSON',
+  type: 'JSON', // the redis instance must support JSON module if you chose to use JSON type cache
   cacheKey: {
     case: CacheCase.SNAKE_CASE,
     delimiter: '*',
@@ -188,14 +188,17 @@ const main = async () => {
 
     const args = {where: {email: userOne.email}};
 
+    // below example uses auto cache key generation function to fetch the results of the auto cache query (above)
+    // similarly, this can be used to uncache an auto cached query during any mutation (this does not support patterns)
     await extendedPrisma.user
       .findUnique({
         ...args,
         cache: {
+          // make sure to use the correct args, model and operation here as it is not being validated
           key: extendedPrisma.getAutoKey({
             args,
             model: 'user',
-            operation: 'count',
+            operation: 'findUnique',
           }),
         },
       })

@@ -18,4 +18,5 @@ model User {
   name      String
   email     String   @unique
   createdAt DateTime @default(now())
+  // isCached    Boolean  @default(true)
 }

@@ -146,10 +146,18 @@ export const getCache = async ({
       }
     } else if (onMiss) onMiss(key);
 
-    const result = await query(args);
+    const result = (await query(args)) as {isCached?: never};
+
+    if (result.isCached)
+      throw new Error(
+        'Query result must not contain keyword `isCached` as a key!',
+      );
 
     const cacheContext = {
-      result,
+      result: {
+        ...result,
+        isCached: true,
+      },
       ttl: ttl * 1000 + timestamp,
       stale: (ttl + stale) * 1000 + timestamp,
     };

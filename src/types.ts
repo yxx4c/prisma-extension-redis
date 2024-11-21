@@ -245,7 +245,6 @@ export interface CacheDefinitionOptions {
 }
 
 export type CacheType = 'JSON' | 'STRING';
-export type CacheKeyType = 'INBUILT' | 'CUSTOM';
 
 export type CacheKey = {
   /**
