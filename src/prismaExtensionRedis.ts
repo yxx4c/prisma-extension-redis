@@ -69,7 +69,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
               config,
             });
 
-          return query(args);
+          return query({...args, cache: undefined});
         },
       },
     },
