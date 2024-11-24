@@ -19,6 +19,7 @@ export const ALL_OPERATIONS = [
   'count',
   'create',
   'createMany',
+  'createManyAndReturn',
   'delete',
   'deleteMany',
   'findFirst',
@@ -92,6 +93,7 @@ export const UNCACHE_REQUIRED_ARG_OPERATIONS = [
 
 export const UNCACHE_OPTIONAL_ARG_OPERATIONS = [
   'createMany',
+  'createManyAndReturn',
   'deleteMany',
   'updateMany',
 ] as const satisfies ReadonlyArray<Operation>;
@@ -239,11 +241,6 @@ export type ExtendedModel = ModelExtension<autoConfig, 'auto'> &
   ModelExtension<cacheConfig, 'cache'> &
   ModelExtension<uncacheConfig, 'uncache'>;
 
-export interface CacheDefinitionOptions {
-  a: JsArgs;
-  q: (args: JsArgs) => Promise<unknown>;
-}
-
 export type CacheType = 'JSON' | 'STRING';
 
 export type CacheKey = {
@@ -276,7 +273,13 @@ interface Logger {
 
 export type CacheConfig = {
   auto: AutoCacheConfig;
+  /**
+   * Redis Cache Type (Redis instance must support JSON module to use JSON)
+   */
   type: CacheType;
+  /**
+   * Inbuilt cache key generation config
+   */
   cacheKey: CacheKey;
   /**
    * Default time-to-live (ttl) value
@@ -286,6 +289,9 @@ export type CacheConfig = {
    * Default stale time after ttl
    */
   stale: number;
+  /**
+   * Custom transfomrer for serializing and deserializing data
+   */
   transformer?: {
     // biome-ignore lint/suspicious/noExplicitAny: <explanation>
     serialize: (data: any) => any;
