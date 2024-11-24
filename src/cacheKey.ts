@@ -28,7 +28,7 @@ export const caseMap = {
 export const getKeyGen =
   (
     delimiter = ':',
-    cacheCase: CacheCase = CacheCase.CAMEL_CASE,
+    cacheCase: CacheCase = CacheCase.SNAKE_CASE,
     prefix = 'prisma',
   ) =>
   ({params, model, operation: op}: CacheKeyParams) =>

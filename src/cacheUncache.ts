@@ -126,9 +126,9 @@ export const getCache = async ({
         cached as string,
       );
 
-      const {result, ttl: cacheTtl, stale: cacheStale} = cacheContext;
+      const {result, isCached, ttl: cacheTtl, stale: cacheStale} = cacheContext;
 
-      if (timestamp < cacheTtl) return result;
+      if (timestamp < cacheTtl) return {result, isCached};
 
       if (timestamp <= cacheStale) {
         query(args).then(result => {
@@ -146,7 +146,7 @@ export const getCache = async ({
 
           setCache(type, key, value, ttl + stale, redis);
         });
-        return result;
+        return {result, isCached};
       }
     } else if (onMiss) onMiss(key);
 
@@ -164,7 +164,7 @@ export const getCache = async ({
 
     setCache(type, key, value, ttl + stale, redis);
 
-    return result;
+    return {result, isCached: false};
   } catch (error) {
     if (onError) onError(error);
     else throw error;
