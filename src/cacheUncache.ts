@@ -1,4 +1,5 @@
 import micromatch from 'micromatch';
+import {coalesceAsync} from 'promise-coalesce';
 
 import type {Operation} from '@prisma/client/runtime/library';
 import type Redis from 'iovalkey';
@@ -121,17 +122,20 @@ export const getCache = async ({
 
     if (cached) {
       if (onHit) onHit(key);
-      const {
-        result,
-        ttl: cacheTtl,
-        stale: cacheStale,
-      } = (transformer?.deserialize || JSON.parse)(cached as string);
+      const cacheContext = (transformer?.deserialize || JSON.parse)(
+        cached as string,
+      );
+
+      const {result, ttl: cacheTtl, stale: cacheStale} = cacheContext;
 
       if (timestamp < cacheTtl) return result;
+
       if (timestamp <= cacheStale) {
         query(args).then(result => {
           const cacheContext = {
             result,
+            isCached: true,
+            key,
             ttl: ttl * 1000 + timestamp,
             stale: (ttl + stale) * 1000 + timestamp,
           };
@@ -148,16 +152,10 @@ export const getCache = async ({
 
     const result = (await query(args)) as {isCached?: never};
 
-    if (result.isCached)
-      throw new Error(
-        'Query result must not contain keyword `isCached` as a key!',
-      );
-
     const cacheContext = {
-      result: {
-        ...result,
-        isCached: true,
-      },
+      result,
+      isCached: true,
+      key,
       ttl: ttl * 1000 + timestamp,
       stale: (ttl + stale) * 1000 + timestamp,
     };
@@ -173,13 +171,16 @@ export const getCache = async ({
   }
 };
 
+export const promiseCoalesceGetCache = ({key, ...rest}: GetDataParams) =>
+  coalesceAsync(key, async () => getCache({key, ...rest}));
+
 export const autoCacheAction = async (
   {redis, options, config}: ActionParams,
   getAutoKey: ReturnType<typeof getAutoKeyGen>,
 ) => {
   const {auto} = config;
 
-  const {query, args, model, operation} = options;
+  const {args, model, operation, query} = options;
 
   const isAutoObject = typeof auto === 'object';
 
@@ -197,7 +198,15 @@ export const autoCacheAction = async (
 
   const key = getAutoKey({args, model, operation: operation as Operation});
 
-  return await getCache({ttl, stale, config, key, redis, args, query});
+  return await promiseCoalesceGetCache({
+    ttl,
+    stale,
+    config,
+    key,
+    redis,
+    args,
+    query,
+  });
 };
 
 export const customCacheAction = async ({
@@ -214,7 +223,15 @@ export const customCacheAction = async ({
   const stale = customStale ?? config.stale ?? 0;
   const ttl = customTtl ?? config.ttl ?? Number.POSITIVE_INFINITY;
 
-  return await getCache({ttl, stale, config, key, redis, args, query});
+  return await promiseCoalesceGetCache({
+    ttl,
+    stale,
+    config,
+    key,
+    redis,
+    args,
+    query,
+  });
 };
 
 export const customUncacheAction = async ({
