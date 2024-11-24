@@ -11,8 +11,10 @@
   },
   "formatter": {
     "enabled": true,
+    "bracketSpacing": false,
     "indentStyle": "space",
-    "bracketSpacing": false
+    "indentWidth": 2,
+    "lineEnding": "lf"
   },
   "organizeImports": {
     "enabled": true
