@@ -150,7 +150,7 @@ export const getCache = async ({
       }
     } else if (onMiss) onMiss(key);
 
-    const result = (await query(args)) as {isCached?: never};
+    const result = await query(args);
 
     const cacheContext = {
       result,
