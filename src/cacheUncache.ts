@@ -262,9 +262,10 @@ export const customUncacheAction = async ({
     }
   } catch (error) {
     if (onError) onError(error);
+    else throw error;
   }
 
-  return query({...args, uncache: undefined});
+  return {result: await query({...args, uncache: undefined})};
 };
 
 export const isAutoCacheEnabled = ({

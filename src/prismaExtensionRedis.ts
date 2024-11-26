@@ -70,7 +70,6 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
 
           return {
             result: await query({...args, cache: undefined}),
-            isCached: false,
           };
         },
       },
