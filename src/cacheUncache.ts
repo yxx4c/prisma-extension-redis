@@ -245,19 +245,20 @@ export const isAutoCacheEnabled = ({
 
   if (xArgs.cache !== undefined && typeof xArgs.cache === 'boolean')
     return xArgs.cache;
-  if (auto) {
-    if (typeof auto === 'object')
-      return (
-        filterOperations(...AUTO_OPERATIONS)(auto.excludedOperations).includes(
-          operation as autoOperations,
-        ) &&
-        !auto.excludedModels?.includes(model) &&
-        !auto.models
-          ?.find(m => m.model === model)
-          ?.excludedOperations?.includes(operation as autoOperations)
-      );
-    return AUTO_OPERATIONS.includes(operation as autoOperations);
-  }
+
+  if (typeof auto === 'object')
+    return (
+      filterOperations(...AUTO_OPERATIONS)(auto.excludedOperations).includes(
+        operation as autoOperations,
+      ) &&
+      !auto.excludedModels?.includes(model) &&
+      !auto.models
+        ?.find(m => m.model === model)
+        ?.excludedOperations?.includes(operation as autoOperations)
+    );
+
+  if (auto) return AUTO_OPERATIONS.includes(operation as autoOperations);
+
   return false;
 };
 
