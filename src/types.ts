@@ -463,8 +463,9 @@ export type RedisCacheResultOrError =
 export type RedisCacheCommands = Record<
   string,
   {
-    GET: (key: string) => Promise<RedisCacheResultOrError>;
-    SET: (
+    get: (redis: Redis, key: string) => Promise<RedisCacheResultOrError>;
+    set: (
+      redis: Redis,
       key: string,
       value: string,
       ttl: number,

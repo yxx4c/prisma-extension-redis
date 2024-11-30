@@ -42,6 +42,31 @@ export const unlinkPatterns = ({patterns, redis}: DeletePatterns) =>
       }),
   );
 
+const commands: RedisCacheCommands = {
+  JSON: {
+    get: (redis, key) => redis.multi().call('JSON.GET', key).exec(),
+
+    set: (redis, key, value, ttl) => {
+      const multi = redis.multi().call('JSON.SET', key, '$', value);
+      if (ttl && ttl !== Number.POSITIVE_INFINITY) {
+        multi.call('EXPIRE', key, ttl);
+      }
+      return multi.exec();
+    },
+  },
+  STRING: {
+    get: (redis, key) => redis.multi().call('GET', key).exec(),
+
+    set: (redis, key, value, ttl) => {
+      const multi = redis.multi().call('SET', key, value);
+      if (ttl && ttl !== Number.POSITIVE_INFINITY) {
+        multi.call('EXPIRE', key, ttl);
+      }
+      return multi.exec();
+    },
+  },
+};
+
 export const getCache = async ({
   ttl,
   stale,
@@ -53,31 +78,6 @@ export const getCache = async ({
 }: GetDataParams) => {
   const {onError, onHit, onMiss, transformer, type} = config;
 
-  const commands: RedisCacheCommands = {
-    JSON: {
-      GET: (key: string) => redis.multi().call('JSON.GET', key).exec(),
-
-      SET: (key: string, value: string, ttl: number) => {
-        const multi = redis.multi().call('JSON.SET', key, '$', value);
-        if (ttl && ttl !== Number.POSITIVE_INFINITY) {
-          multi.call('EXPIRE', key, ttl);
-        }
-        return multi.exec();
-      },
-    },
-    STRING: {
-      GET: (key: string) => redis.multi().call('GET', key).exec(),
-
-      SET: (key: string, value: string, ttl: number) => {
-        const multi = redis.multi().call('SET', key, value);
-        if (ttl && ttl !== Number.POSITIVE_INFINITY) {
-          multi.call('EXPIRE', key, ttl);
-        }
-        return multi.exec();
-      },
-    },
-  };
-
   if (!commands[type])
     throw new Error(
       'Incorrect CacheType provided! Supported values: JSON | STRING',
@@ -85,7 +85,7 @@ export const getCache = async ({
 
   const command = commands[type];
 
-  const [[error, cached]] = (await command.GET(key)) ?? [];
+  const [[error, cached]] = (await command.get(redis, key)) ?? [];
 
   if (onError && error) onError(error);
 
@@ -113,7 +113,7 @@ export const getCache = async ({
 
     if (timestamp < cacheTime + cacheTtl) return {result, isCached};
 
-    if (timestamp <= cacheTime + cacheStale) {
+    if (timestamp <= cacheTime + cacheStale)
       query(args).then(result => {
         const cacheContext = {
           isCached: true,
@@ -123,14 +123,15 @@ export const getCache = async ({
           timestamp,
           ttl,
         };
-        command.SET(
+        command.set(
+          redis,
           key,
           (transformer?.serialize || JSON.stringify)(cacheContext),
           ttl + stale,
         );
       });
-      return {result, isCached};
-    }
+
+    return {result, isCached};
   }
 
   if (!cached && onMiss) onMiss(key);
@@ -138,7 +139,8 @@ export const getCache = async ({
   const result = await query(args);
 
   const cacheContext = {isCached: true, key, result, stale, timestamp, ttl};
-  command.SET(
+  command.set(
+    redis,
     key,
     (transformer?.serialize || JSON.stringify)(cacheContext),
     ttl + stale,
