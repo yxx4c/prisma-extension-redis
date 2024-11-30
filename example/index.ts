@@ -49,9 +49,9 @@ const config: CacheConfig = {
   // onMiss: (key: string) => console.log(`NOT FOUND CACHE: ${key}`),
   type: 'JSON', // the redis instance must support JSON module if you chose to use JSON type cache
   // cacheKey: {
-    // case: CacheCase.CAMEL_CASE,
-    // delimiter: '*',
-    // prefix: 'awesomeness',
+  // case: CacheCase.CAMEL_CASE,
+  // delimiter: '*',
+  // prefix: 'awesomeness',
   // },
 };
 

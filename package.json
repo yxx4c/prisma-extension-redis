@@ -50,7 +50,7 @@
     "compile": "tsc",
     "fix": "biome format --fix",
     "prepare": "bun run compile",
-    "pretest": "bunx prisma generate --schema ./test/prisma/schema.prisma",
+    "pretest": "bunx prisma migrate dev --schema ./test/prisma/schema.prisma",
     "posttest": "bun run lint"
   },
   "devDependencies": {

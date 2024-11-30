@@ -1,5 +1,4 @@
 import type {Prisma} from '@prisma/client';
-import {extendedPrisma} from './client';
 
 interface User {
   id: number;
@@ -7,7 +6,10 @@ interface User {
   email: string;
 }
 
-export const createUser = async (user: User) =>
+// biome-ignore lint/suspicious/noExplicitAny: <To use different type of client config>
+type PrismaClient = any;
+
+export const createUser = async (extendedPrisma: PrismaClient, user: User) =>
   await extendedPrisma.user.create({
     data: user,
     uncache: {
@@ -21,7 +23,10 @@ export const createUser = async (user: User) =>
     },
   });
 
-export const createManyUser = async (users: User[]) =>
+export const createManyUser = async (
+  extendedPrisma: PrismaClient,
+  users: User[],
+) =>
   await extendedPrisma.user.createManyAndReturn({
     data: users,
     select: {
@@ -32,6 +37,7 @@ export const createManyUser = async (users: User[]) =>
   });
 
 export const updateUserDetails = async (
+  extendedPrisma: PrismaClient,
   user: User,
   uncache?: {uncacheKeys: string[]; hasPattern?: boolean},
 ) =>
@@ -47,6 +53,7 @@ export const updateUserDetails = async (
   });
 
 export const autoFindUserByWhereUniqueInput = async (
+  extendedPrisma: PrismaClient,
   where: Prisma.UserWhereUniqueInput,
 ) =>
   await extendedPrisma.user.findUnique({
@@ -59,13 +66,16 @@ export const autoFindUserByWhereUniqueInput = async (
   });
 
 export const customFindUserByWhereUniqueInput = async (
+  extendedPrisma: PrismaClient,
   where: Prisma.UserWhereUniqueInput,
   key: string,
+  infinite = false,
 ) =>
   await extendedPrisma.user.findUnique({
     where,
     cache: {
       key,
+      ...(infinite ? {ttl: Number.POSITIVE_INFINITY} : {}),
     },
     select: {
       id: true,
@@ -75,6 +85,7 @@ export const customFindUserByWhereUniqueInput = async (
   });
 
 export const deleteUserById = async (
+  extendedPrisma: PrismaClient,
   id: number,
   uncacheKeys: string[],
   hasPattern = false,
@@ -89,7 +100,7 @@ export const deleteUserById = async (
     },
   });
 
-export const deleteAllUsers = async () =>
+export const deleteAllUsers = async (extendedPrisma: PrismaClient) =>
   await extendedPrisma.user.deleteMany({
     uncache: {
       uncacheKeys: [extendedPrisma.getKeyPattern({params: [{prisma: '*'}]})],
@@ -97,10 +108,16 @@ export const deleteAllUsers = async () =>
     },
   });
 
-export const getCountOfUsersWithoutCaching = async () =>
+export const getCountOfUsersWithoutCaching = async (
+  extendedPrisma: PrismaClient,
+) =>
   await extendedPrisma.user.count({
     cache: false,
   });
 
-export const deleteAllUsersAndGetCountOfUsersWithoutCaching = () =>
-  deleteAllUsers().then(() => getCountOfUsersWithoutCaching());
+export const deleteAllUsersAndGetCountOfUsersWithoutCaching = (
+  extendedPrisma: PrismaClient,
+) =>
+  deleteAllUsers(extendedPrisma).then(() =>
+    getCountOfUsersWithoutCaching(extendedPrisma),
+  );

@@ -26,7 +26,7 @@ const config: CacheConfig = {
   ttl: 60,
   stale: 30,
   auto,
-  type: 'STRING',
+  type: 'JSON',
 };
 
 export const prisma = new PrismaClient();
@@ -34,8 +34,6 @@ export const prisma = new PrismaClient();
 export const extendedPrismaWithJsonAndCustomAutoCache = prisma.$extends(
   PrismaExtensionRedis({config, client}),
 );
-
-export const extendedPrisma = extendedPrismaWithJsonAndCustomAutoCache;
 
 export const extendedPrismaWithJsonAndAutoCacheTrue = prisma.$extends(
   PrismaExtensionRedis({
@@ -63,6 +61,18 @@ export const extendedPrismaWithStringAndAutoCacheTrue = prisma.$extends(
       ...config,
       type: 'STRING',
       auto: true,
+    },
+    client,
+  }),
+);
+
+export const extendedPrismaWithExtendedStale = prisma.$extends(
+  PrismaExtensionRedis({
+    config: {
+      auto: true,
+      stale: 300,
+      ttl: 1,
+      type: 'JSON',
     },
     client,
   }),
