@@ -121,3 +121,6 @@ export const deleteAllUsersAndGetCountOfUsersWithoutCaching = (
   deleteAllUsers(extendedPrisma).then(() =>
     getCountOfUsersWithoutCaching(extendedPrisma),
   );
+
+export const delay = (ms: number) =>
+  new Promise(resolve => setTimeout(resolve, ms));

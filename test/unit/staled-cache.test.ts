@@ -3,6 +3,7 @@ import {
   createUser,
   autoFindUserByWhereUniqueInput,
   deleteAllUsersAndGetCountOfUsersWithoutCaching,
+  delay,
 } from '../functions';
 
 import {users} from '../data';
@@ -36,6 +37,8 @@ test('User Retrieval: should find a user by email from the database', async () =
 test('User Retrieval: should find a user by email from staled cache', async () => {
   const userOne = users.find(user => user.id === 1);
   if (!userOne) throw new Error('Invalid user information!');
+
+  await delay(1000);
 
   expect(
     autoFindUserByWhereUniqueInput(extendedPrismaWithExtendedStale, {
