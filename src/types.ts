@@ -447,6 +447,31 @@ export type GetDataParams = {
   query: (args: JsArgs) => Promise<unknown>;
 };
 
+export type CacheContext = {
+  isCached: boolean;
+  // biome-ignore lint/suspicious/noExplicitAny: <Any Result>
+  result: any;
+  stale: number;
+  timestamp: number;
+  ttl: number;
+};
+
+export type RedisCacheResultOrError =
+  | [error: Error | null, result: unknown][]
+  | null;
+
+export type RedisCacheCommands = Record<
+  string,
+  {
+    GET: (key: string) => Promise<RedisCacheResultOrError>;
+    SET: (
+      key: string,
+      value: string,
+      ttl: number,
+    ) => Promise<RedisCacheResultOrError>;
+  }
+>;
+
 export type CacheKeyParams = {
   /**
    * Key params to generate key

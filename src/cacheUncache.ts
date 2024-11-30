@@ -2,17 +2,17 @@ import micromatch from 'micromatch';
 import {coalesceAsync} from 'promise-coalesce';
 
 import type {Operation} from '@prisma/client/runtime/library';
-import type Redis from 'iovalkey';
 
 import {
   AUTO_OPERATIONS,
   type ActionCheckParams,
   type ActionParams,
   CACHE_OPERATIONS,
+  type CacheContext,
   type CacheOptions,
-  type CacheType,
   type DeletePatterns,
   type GetDataParams,
+  type RedisCacheCommands,
   UNCACHE_OPERATIONS,
   type UncacheOptions,
   type autoOperations,
@@ -42,41 +42,6 @@ export const unlinkPatterns = ({patterns, redis}: DeletePatterns) =>
       }),
   );
 
-export const setCache = async (
-  type: CacheType,
-  key: string,
-  value: string,
-  ttl: number | undefined,
-  redis: Redis,
-) => {
-  switch (type) {
-    case 'JSON': {
-      if (ttl && ttl !== Number.POSITIVE_INFINITY)
-        return redis
-          .multi()
-          .call('JSON.SET', key, '$', value)
-          .call('EXPIRE', key, ttl)
-          .exec();
-      return redis.multi().call('JSON.SET', key, '$', value).exec();
-    }
-
-    case 'STRING': {
-      if (ttl && ttl !== Number.POSITIVE_INFINITY)
-        return redis
-          .multi()
-          .call('SET', key, value)
-          .call('EXPIRE', key, ttl)
-          .exec();
-      return await redis.multi().call('SET', key, value).exec();
-    }
-
-    default:
-      throw new Error(
-        'Incorrect CacheType provided! Supported values: JSON | STRING',
-      );
-  }
-};
-
 export const getCache = async ({
   ttl,
   stale,
@@ -88,87 +53,98 @@ export const getCache = async ({
 }: GetDataParams) => {
   const {onError, onHit, onMiss, transformer, type} = config;
 
-  try {
-    let cache: [error: Error | null, result: unknown][] | null = null;
+  const commands: RedisCacheCommands = {
+    JSON: {
+      GET: (key: string) => redis.multi().call('JSON.GET', key).exec(),
 
-    switch (type) {
-      case 'JSON': {
-        cache = await redis.multi().call('JSON.GET', key).exec();
-        break;
-      }
+      SET: (key: string, value: string, ttl: number) => {
+        const multi = redis.multi().call('JSON.SET', key, '$', value);
+        if (ttl && ttl !== Number.POSITIVE_INFINITY) {
+          multi.call('EXPIRE', key, ttl);
+        }
+        return multi.exec();
+      },
+    },
+    STRING: {
+      GET: (key: string) => redis.multi().call('GET', key).exec(),
 
-      case 'STRING': {
-        cache = await redis.multi().call('GET', key).exec();
-        break;
-      }
+      SET: (key: string, value: string, ttl: number) => {
+        const multi = redis.multi().call('SET', key, value);
+        if (ttl && ttl !== Number.POSITIVE_INFINITY) {
+          multi.call('EXPIRE', key, ttl);
+        }
+        return multi.exec();
+      },
+    },
+  };
 
-      default:
-        throw new Error(
-          'Incorrect CacheType provided! Supported values: JSON | STRING',
-        );
-    }
+  if (!commands[type])
+    throw new Error(
+      'Incorrect CacheType provided! Supported values: JSON | STRING',
+    );
 
-    const [[error, cached]] = cache ?? [];
+  const command = commands[type];
 
-    if (onError && error) onError(error);
+  const [[error, cached]] = (await command.GET(key)) ?? [];
 
-    const timestamp = Date.now();
+  if (onError && error) onError(error);
 
-    const args = {
-      ...xArgs,
-    };
+  const timestamp = Date.now() / 1000;
 
-    args.cache = undefined;
+  const args = {
+    ...xArgs,
+  };
 
-    if (cached) {
-      if (onHit) onHit(key);
-      const cacheContext = (transformer?.deserialize || JSON.parse)(
-        cached as string,
-      );
+  args.cache = undefined;
 
-      const {result, isCached, ttl: cacheTtl, stale: cacheStale} = cacheContext;
+  if (cached) {
+    if (onHit) onHit(key);
+    const cacheContext: CacheContext = (transformer?.deserialize || JSON.parse)(
+      cached as string,
+    );
 
-      if (timestamp < cacheTtl) return {result, isCached};
-
-      if (timestamp <= cacheStale) {
-        query(args).then(result => {
-          const cacheContext = {
-            result,
-            isCached: true,
-            key,
-            ttl: ttl * 1000 + timestamp,
-            stale: (ttl + stale) * 1000 + timestamp,
-          };
-
-          const value = (transformer?.serialize || JSON.stringify)(
-            cacheContext,
-          );
-
-          setCache(type, key, value, ttl + stale, redis);
-        });
-        return {result, isCached};
-      }
-    } else if (onMiss) onMiss(key);
-
-    const result = await query(args);
-
-    const cacheContext = {
+    const {
+      isCached,
       result,
-      isCached: true,
-      key,
-      ttl: ttl * 1000 + timestamp,
-      stale: (ttl + stale) * 1000 + timestamp,
-    };
+      stale: cacheStale,
+      timestamp: cacheTime,
+      ttl: cacheTtl,
+    } = cacheContext;
 
-    const value = (transformer?.serialize || JSON.stringify)(cacheContext);
+    if (timestamp < cacheTime + cacheTtl) return {result, isCached};
 
-    setCache(type, key, value, ttl + stale, redis);
-
-    return {result, isCached: false};
-  } catch (error) {
-    if (onError) onError(error);
-    else throw error;
+    if (timestamp <= cacheTime + cacheStale) {
+      query(args).then(result => {
+        const cacheContext = {
+          isCached: true,
+          key,
+          result,
+          stale,
+          timestamp,
+          ttl,
+        };
+        command.SET(
+          key,
+          (transformer?.serialize || JSON.stringify)(cacheContext),
+          ttl + stale,
+        );
+      });
+      return {result, isCached};
+    }
   }
+
+  if (!cached && onMiss) onMiss(key);
+
+  const result = await query(args);
+
+  const cacheContext = {isCached: true, key, result, stale, timestamp, ttl};
+  command.SET(
+    key,
+    (transformer?.serialize || JSON.stringify)(cacheContext),
+    ttl + stale,
+  );
+
+  return {result, isCached: false};
 };
 
 export const promiseCoalesceGetCache = ({key, ...rest}: GetDataParams) =>
@@ -220,8 +196,8 @@ export const customCacheAction = async ({
     stale: customStale,
   } = args.cache as unknown as CacheOptions;
 
-  const stale = customStale ?? config.stale ?? 0;
-  const ttl = customTtl ?? config.ttl ?? Number.POSITIVE_INFINITY;
+  const ttl = customTtl ?? config.ttl;
+  const stale = customStale ?? config.stale;
 
   return await promiseCoalesceGetCache({
     ttl,
@@ -239,31 +215,22 @@ export const customUncacheAction = async ({
   options: {args, query},
   config,
 }: ActionParams) => {
-  const {onError} = config;
+  const {uncacheKeys, hasPattern} = args.uncache as unknown as UncacheOptions;
 
-  try {
-    const {uncacheKeys, hasPattern} = args.uncache as unknown as UncacheOptions;
+  if (hasPattern) {
+    const patternKeys = micromatch(uncacheKeys, ['*\\**', '*\\?*']);
+    const plainKeys = micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']);
 
-    if (hasPattern) {
-      const patternKeys = micromatch(uncacheKeys, ['*\\**', '*\\?*']);
-      const plainKeys = micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']);
+    const unlinkPromises = [
+      ...unlinkPatterns({
+        redis,
+        patterns: patternKeys,
+      }),
+      ...(plainKeys.length ? [redis.unlink(plainKeys)] : []),
+    ];
 
-      const unlinkPromises = [
-        ...unlinkPatterns({
-          redis,
-          patterns: patternKeys,
-        }),
-        ...(plainKeys.length ? [redis.unlink(plainKeys)] : []),
-      ];
-
-      await Promise.all(unlinkPromises);
-    } else {
-      await redis.unlink(uncacheKeys);
-    }
-  } catch (error) {
-    if (onError) onError(error);
-    else throw error;
-  }
+    await Promise.all(unlinkPromises);
+  } else await redis.unlink(uncacheKeys);
 
   return {result: await query({...args, uncache: undefined})};
 };
@@ -287,7 +254,7 @@ export const isAutoCacheEnabled = ({
           ?.find(m => m.model === model)
           ?.excludedOperations?.includes(operation as autoOperations)
       );
-    return true;
+    return AUTO_OPERATIONS.includes(operation as autoOperations);
   }
   return false;
 };
