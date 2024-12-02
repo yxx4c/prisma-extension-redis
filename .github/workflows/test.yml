@@ -1,0 +1,59 @@
+name: test
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    services:
+      dragonfly:
+        image: "docker.dragonflydb.io/dragonflydb/dragonfly"
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+        volumes:
+          - dragonfly:/data
+      postgres:
+        image: postgres:alpine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: testdb
+        volumes:
+          - postgres:/var/lib/postgresql/data
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Bun Package Manager
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Project Dependencies
+        run: bun install
+
+      - name: Run Test Suite
+        env:
+          REDIS_SERVICE_URI: redis://localhost:6379
+          POSTGRES_SERVICE_URI: postgres://user:password@localhost:5432/testdb
+        run: bun run test
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

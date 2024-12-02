@@ -16,12 +16,11 @@ import type {ExtendedModel, PrismaExtensionRedisOptions} from './types';
 export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   const {
     config,
-    config: {
-      auto,
-      cacheKey: {delimiter, case: cacheCase, prefix},
-    },
+    config: {auto, cacheKey},
     client: redisOptions,
   } = options;
+
+  const {delimiter, case: cacheCase, prefix} = cacheKey ?? {};
 
   const redis = new Redis(redisOptions);
 
@@ -69,7 +68,9 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
               config,
             });
 
-          return query({...args, cache: undefined});
+          return {
+            result: await query({...args, cache: undefined}),
+          };
         },
       },
     },
