@@ -1,6 +1,8 @@
 
 # Prisma Extension Redis
 
+[![test](https://github.com/yxx4c/prisma-extension-redis/actions/workflows/test.yml/badge.svg)](https://github.com/yxx4c/prisma-extension-redis/actions/workflows/test.yml)
+[![codecov](https://codecov.io/github/yxx4c/prisma-extension-redis/graph/badge.svg?token=G7O92H6I7T)](https://codecov.io/github/yxx4c/prisma-extension-redis)
 ![NPM License](https://img.shields.io/npm/l/prisma-extension-redis)
 ![NPM Version](https://img.shields.io/npm/v/prisma-extension-redis)
 ![NPM Downloads](https://img.shields.io/npm/dw/prisma-extension-redis)

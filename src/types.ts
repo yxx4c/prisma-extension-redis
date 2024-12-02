@@ -167,35 +167,44 @@ type PrismaUncacheArgs = {
   uncache?: UncacheOptions;
 };
 
+type CacheResultPromise<T, A, O extends Operation> = Promise<{
+  result: Prisma.Result<T, A, O>;
+  isCached: boolean;
+}>;
+
+type UnCacheResultPromise<T, A, O extends Operation> = Promise<{
+  result: Prisma.Result<T, A, O>;
+}>;
+
 type AutoRequiredArgsFunction<O extends Operation> = <T, A>(
   this: T,
   args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>,
-) => Promise<Prisma.Result<T, A, O>>;
+) => CacheResultPromise<T, A, O>;
 
 type AutoOptionalArgsFunction<O extends Operation> = <T, A>(
   this: T,
   args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>,
-) => Promise<Prisma.Result<T, A, O>>;
+) => CacheResultPromise<T, A, O>;
 
 type CacheRequiredArgsFunction<O extends Operation> = <T, A>(
   this: T,
   args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs>,
-) => Promise<Prisma.Result<T, A, O>>;
+) => CacheResultPromise<T, A, O>;
 
 type CacheOptionalArgsFunction<O extends Operation> = <T, A>(
   this: T,
   args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs>,
-) => Promise<Prisma.Result<T, A, O>>;
+) => CacheResultPromise<T, A, O>;
 
 type UncacheRequiredArgsFunction<O extends Operation> = <T, A>(
   this: T,
   args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaUncacheArgs>,
-) => Promise<Prisma.Result<T, A, O>>;
+) => UnCacheResultPromise<T, A, O>;
 
 type UncacheOptionalArgsFunction<O extends Operation> = <T, A>(
   this: T,
   args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaUncacheArgs>,
-) => Promise<Prisma.Result<T, A, O>>;
+) => UnCacheResultPromise<T, A, O>;
 
 type OperationsConfig<
   RequiredArg extends Operation[],
@@ -245,17 +254,21 @@ export type CacheType = 'JSON' | 'STRING';
 
 export type CacheKey = {
   /**
-   * Cache key delimiter (default value: ':')
+   * Cache key delimiter
+   * Default value: ':'
    */
-  delimiter: string;
+  delimiter?: string;
 
   /**
-   * Use CacheCase to set how the generated INBUILT type keys are formatted (default value: CacheCase.CAMEL_CASE)
+   * Use CacheCase to set how the generated INBUILT type keys are formatted
+   * Formatting strips non alpha-numeric characters
+   * Default value: CacheCase.SNAKE_CASE
    */
-  case: CacheCase;
+  case?: CacheCase;
 
   /**
-   * AutoCache key prefix (default value: 'prisma')
+   * AutoCache key prefix
+   * Default value: 'prisma'
    */
   prefix?: string;
 };
@@ -273,22 +286,27 @@ interface Logger {
 
 export type CacheConfig = {
   auto: AutoCacheConfig;
+
   /**
    * Redis Cache Type (Redis instance must support JSON module to use JSON)
    */
   type: CacheType;
+
   /**
    * Inbuilt cache key generation config
    */
-  cacheKey: CacheKey;
+  cacheKey?: CacheKey;
+
   /**
    * Default time-to-live (ttl) value
    */
   ttl: number;
+
   /**
    * Default stale time after ttl
    */
   stale: number;
+
   /**
    * Custom transfomrer for serializing and deserializing data
    */
@@ -428,6 +446,32 @@ export type GetDataParams = {
   args: JsArgs;
   query: (args: JsArgs) => Promise<unknown>;
 };
+
+export type CacheContext = {
+  isCached: boolean;
+  // biome-ignore lint/suspicious/noExplicitAny: <Any Result>
+  result: any;
+  stale: number;
+  timestamp: number;
+  ttl: number;
+};
+
+export type RedisCacheResultOrError =
+  | [error: Error | null, result: unknown][]
+  | null;
+
+export type RedisCacheCommands = Record<
+  string,
+  {
+    get: (redis: Redis, key: string) => Promise<RedisCacheResultOrError>;
+    set: (
+      redis: Redis,
+      key: string,
+      value: string,
+      ttl: number,
+    ) => Promise<RedisCacheResultOrError>;
+  }
+>;
 
 export type CacheKeyParams = {
   /**

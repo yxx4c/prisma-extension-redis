@@ -1,3 +1,4 @@
+export type {RedisOptions} from 'iovalkey';
 export {PrismaExtensionRedis} from './prismaExtensionRedis';
 export type {
   AutoCacheConfig,

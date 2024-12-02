@@ -1,7 +1,7 @@
 name: prisma
 services:
   dragonfly:
-    image: 'docker.dragonflydb.io/dragonflydb/dragonfly'
+    image: "docker.dragonflydb.io/dragonflydb/dragonfly"
     hostname: dragonfly
     container_name: dragonfly
     restart: always
@@ -10,19 +10,19 @@ services:
     ulimits:
       memlock: -1
     ports:
-      - '6379:6379'
+      - "6379:6379"
     volumes:
       - dragonfly:/data
     command:
       [
-        '--default_lua_flags',
-        'allow-undeclared-keys',
-        '--cluster_mode',
-        'emulated',
-        '--lock_on_hashtags',
+        "--default_lua_flags",
+        "allow-undeclared-keys",
+        "--cluster_mode",
+        "emulated",
+        "--lock_on_hashtags",
       ]
   insight:
-    image: 'redis/redisinsight'
+    image: "redis/redisinsight"
     hostname: insight
     container_name: insight
     restart: always
@@ -31,9 +31,40 @@ services:
     ulimits:
       memlock: -1
     ports:
-      - '5540:5540'
+      - "5540:5540"
     volumes:
       - insight:/data
+  postgres:
+    image: postgres:alpine
+    hostname: postgres
+    container_name: postgres
+    restart: always
+    mem_limit: 512m
+    cpus: 1
+    ulimits:
+      memlock: -1
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: testdb
+  # To disable the simulation of network latency, comment out the code below.
+  latency:
+    image: alpine:latest
+    container_name: latency
+    cap_add:
+      - NET_ADMIN
+    command: >
+      sh -c 'apk add --no-cache iproute2 &&
+              tc qdisc add dev eth0 root netem delay 100ms &&
+              sleep 3600'  # Keep the container running
+    network_mode: "service:postgres"
+    depends_on:
+      - postgres
 volumes:
   dragonfly:
   insight:
+  postgres:
