@@ -1,6 +1,6 @@
 {
   "name": "prisma-extension-redis",
-  "version": "2.2.1",
+  "version": "3.0.0",
   "description": "Extensive Prisma extension designed for efficient caching and cache invalidation using Redis and Dragonfly Databases",
   "repository": {
     "type": "git",
