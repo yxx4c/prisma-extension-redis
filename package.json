@@ -68,7 +68,7 @@
     "access": "public"
   },
   "release": {
-    "branches": ["main"]
+    "branches": ["main", "next", "beta"]
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
