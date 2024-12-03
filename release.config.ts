@@ -20,7 +20,7 @@ export default {
     [
       '@semantic-release/github',
       {
-        assets: ['build.zip', 'build.tar.gz'],
+        assets: ['build.zip', 'build.tar.gz', 'CHANGELOG.md'],
       },
     ],
     [
