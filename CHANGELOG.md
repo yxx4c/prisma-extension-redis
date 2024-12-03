@@ -1,3 +1,10 @@
+## [3.0.1](https://github.com/yxx4c/prisma-extension-redis/compare/v3.0.0...v3.0.1) (2024-12-03)
+
+
+### Bug Fixes
+
+* **package.json:** update repository URL format to use git+https for consistency and compatibility ([998d98b](https://github.com/yxx4c/prisma-extension-redis/commit/998d98b19c90ba54bc4d7eb2e4b192b6bbf478a7))
+
 # [3.0.0](https://github.com/yxx4c/prisma-extension-redis/compare/v2.2.1...v3.0.0) (2024-12-03)
 
 
