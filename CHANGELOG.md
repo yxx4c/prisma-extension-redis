@@ -1,3 +1,10 @@
+# [3.1.0](https://github.com/yxx4c/prisma-extension-redis/compare/v3.0.0...v3.1.0) (2024-12-03)
+
+
+### Features
+
+* **keywords:** update keywords for improved visibility and searchability ([4c66252](https://github.com/yxx4c/prisma-extension-redis/commit/4c66252b0f164afdbb66d103a5f88f6e6f4e54cf))
+
 # [3.0.0](https://github.com/yxx4c/prisma-extension-redis/compare/v2.2.1...v3.0.0) (2024-12-03)
 
 
