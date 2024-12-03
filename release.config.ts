@@ -27,15 +27,15 @@ export default {
       '@amanda-mitchell/semantic-release-npm-multiple',
       {
         registries: {
-          github: {
-            assets: [
-              'dist/**',
-              'package.json',
-              'CHANGELOG.md',
-              'LICENSE',
-              'README.md',
-            ],
-          },
+          // github: {
+          //   assets: [
+          //     'dist/**',
+          //     'package.json',
+          //     'CHANGELOG.md',
+          //     'LICENSE',
+          //     'README.md',
+          //   ],
+          // },
           public: {
             assets: [
               'dist/**',
