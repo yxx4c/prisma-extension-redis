@@ -4,7 +4,7 @@
   "description": "Extensive Prisma extension designed for efficient caching and cache invalidation using Redis and Dragonfly Databases",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yxx4c/prisma-extension-redis.git"
+    "url": "git+https://github.com/yxx4c/prisma-extension-redis.git"
   },
   "homepage": "https://github.com/yxx4c/prisma-extension-redis",
   "bugs": "https://github.com/yxx4c/prisma-extension-redis/issues",
