@@ -45,6 +45,7 @@ jobs:
 
       - name: Publish Package
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_NPM_CONFIG_REGISTRY: https://npm.pkg.github.com/
           GITHUB_NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLIC_NPM_CONFIG_REGISTRY: https://registry.npmjs.org
