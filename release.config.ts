@@ -17,7 +17,6 @@ export default {
         changelogFile: 'CHANGELOG.md',
       },
     ],
-
     [
       '@semantic-release/github',
       {
@@ -28,16 +27,25 @@ export default {
       '@amanda-mitchell/semantic-release-npm-multiple',
       {
         registries: {
-          github: {},
-          public: {},
+          github: {
+            assets: [
+              'dist/**',
+              'package.json',
+              'CHANGELOG.md',
+              'LICENSE',
+              'README.md',
+            ],
+          },
+          public: {
+            assets: [
+              'dist/**',
+              'package.json',
+              'CHANGELOG.md',
+              'LICENSE',
+              'README.md',
+            ],
+          },
         },
-        assets: [
-          'dist/**',
-          'package.json',
-          'CHANGELOG.md',
-          'LICENSE',
-          'README.md',
-        ],
       },
     ],
     '@semantic-release/git',
