@@ -1,0 +1,45 @@
+name: prisma
+services:
+  dragonfly:
+    image: "docker.dragonflydb.io/dragonflydb/dragonfly"
+    hostname: dragonfly
+    container_name: dragonfly
+    restart: always
+    mem_limit: 512m
+    cpus: 1
+    ulimits:
+      memlock: -1
+    ports:
+      - "6379:6379"
+    volumes:
+      - dragonfly:/data
+    command:
+      [
+        "--default_lua_flags",
+        "allow-undeclared-keys",
+        "--cluster_mode",
+        "emulated",
+        "--lock_on_hashtags",
+      ]
+
+  postgres:
+    image: postgres:alpine
+    hostname: postgres
+    container_name: postgres
+    restart: always
+    mem_limit: 512m
+    cpus: 1
+    ulimits:
+      memlock: -1
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: testdb
+
+volumes:
+  dragonfly:
+  postgres:

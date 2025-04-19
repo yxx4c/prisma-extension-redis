@@ -38,7 +38,11 @@
   "typesVersions": {
     "*": {}
   },
-  "files": ["dist/**/*", "LICENSE", "README.md"],
+  "files": [
+    "dist/**/*",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "biome": "biome",
@@ -50,7 +54,7 @@
     "compile": "tsc",
     "fix": "biome format --fix",
     "prepare": "bun run compile",
-    "pretest": "bunx prisma migrate dev --schema ./test/prisma/schema.prisma",
+    "pretest": "docker compose -f test/compose.yaml up -d && bunx prisma@5 migrate dev --schema ./test/prisma/schema.prisma",
     "posttest": "bun run lint",
     "release": "semantic-release"
   },
@@ -68,12 +72,15 @@
     "access": "public"
   },
   "release": {
-    "branches": ["main", "next", "beta"]
+    "branches": [
+      "main",
+      "next",
+      "beta"
+    ]
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
     "iovalkey": "^0.2.1",
-    "lodash-es": "^4.17.21",
     "micromatch": "^4.0.7",
     "object-code": "^1.3.3",
     "promise-coalesce": "^1.1.2"

@@ -1,29 +1,14 @@
-import {camelCase, kebabCase, snakeCase, startCase} from 'lodash-es';
-
 import type {
   CacheAutoKeyParams,
   CacheKeyParams,
   CacheKeyPatternParams,
 } from './types';
 import {hash} from 'object-code';
+import {CacheCase, caseMap} from './keyCases';
 
 const globCheckRegex = /[*?]/;
 
 const globCheck = (s: string) => globCheckRegex.test(s);
-
-export enum CacheCase {
-  CAMEL_CASE = 'camelCase',
-  KEBAB_CASE = 'kebabCase',
-  SNAKE_CASE = 'snakeCase',
-  START_CASE = 'startCase',
-}
-
-export const caseMap = {
-  [CacheCase.CAMEL_CASE]: camelCase,
-  [CacheCase.KEBAB_CASE]: kebabCase,
-  [CacheCase.SNAKE_CASE]: snakeCase,
-  [CacheCase.START_CASE]: startCase,
-};
 
 export const getKeyGen =
   (
