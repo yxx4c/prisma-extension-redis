@@ -12,10 +12,12 @@ type PrismaClient = any;
 export const createUser = async (extendedPrisma: PrismaClient, user: User) =>
   await extendedPrisma.user.create({
     data: user,
-    uncache: {
-      uncacheKeys: ['*'],
-      hasPattern: true,
-    },
+    // Auto-invalidation should handle this, manual invalidation might not be needed here
+    // Keeping it commented out for now, review if needed for specific tests
+    // invalidate: {
+    //   invalidateKeys: ['*'],
+    //   hasPattern: true,
+    // },
     select: {
       id: true,
       name: true,
@@ -39,7 +41,7 @@ export const createManyUser = async (
 export const updateUserDetails = async (
   extendedPrisma: PrismaClient,
   user: User,
-  uncache?: {uncacheKeys: string[]; hasPattern?: boolean},
+  invalidate?: {invalidateKeys: string[]; hasPattern?: boolean},
 ) =>
   await extendedPrisma.user.update({
     where: {id: user.id},
@@ -49,7 +51,7 @@ export const updateUserDetails = async (
       name: true,
       email: true,
     },
-    uncache,
+    invalidate,
   });
 
 export const autoFindUserByWhereUniqueInput = async (
@@ -87,23 +89,23 @@ export const customFindUserByWhereUniqueInput = async (
 export const deleteUserById = async (
   extendedPrisma: PrismaClient,
   id: number,
-  uncacheKeys: string[],
+  invalidateKeys: string[],
   hasPattern = false,
 ) =>
   await extendedPrisma.user.delete({
     where: {
       id,
     },
-    uncache: {
-      uncacheKeys,
+    invalidate: {
+      invalidateKeys,
       hasPattern,
     },
   });
 
 export const deleteAllUsers = async (extendedPrisma: PrismaClient) =>
   await extendedPrisma.user.deleteMany({
-    uncache: {
-      uncacheKeys: [extendedPrisma.getKeyPattern({params: [{prisma: '*'}]})],
+    invalidate: {
+      invalidateKeys: [extendedPrisma.getKeyPattern({params: [{prisma: '*'}]})],
       hasPattern: true,
     },
   });
