@@ -58,6 +58,11 @@ export class IovalkeyCacheProvider implements CacheProvider {
     }
   }
 
+  async exists(key: string): Promise<boolean> {
+    const result = await this.redis.exists(key);
+    return result === 1;
+  }
+
   async delete(keys: string[]): Promise<void> {
     if (keys.length === 0) return;
     await this.redis.unlink(keys);
@@ -100,6 +105,10 @@ export class IovalkeyCacheProvider implements CacheProvider {
         }
       });
     });
+  }
+
+  async flushdb(): Promise<void> {
+    await this.redis.flushdb();
   }
 
   async disconnect(): Promise<void> {

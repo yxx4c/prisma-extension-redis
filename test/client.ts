@@ -1,4 +1,4 @@
-import {PrismaClient} from '@prisma/client';
+import {PrismaClient} from './prisma/generated';
 import {
   type AutoCacheConfig,
   type CacheConfig,
@@ -24,14 +24,14 @@ const auto: AutoCacheConfig = {
   ttl: 30,
 };
 
-const config: CacheConfig = {
+export const config: CacheConfig = {
   ttl: 60,
   stale: 30,
   auto,
   type: 'JSON',
 };
 
-const provider = new IovalkeyCacheProvider(options);
+export const provider = new IovalkeyCacheProvider(options);
 
 export const prisma = new PrismaClient();
 
@@ -100,7 +100,3 @@ export const extendedPrismaWithInvalidCacheType = prisma.$extends(
     provider,
   }),
 );
-
-export const getProvider = (client: PrismaClient & { provider: CacheProvider }): CacheProvider => {
-  return client.provider;
-};

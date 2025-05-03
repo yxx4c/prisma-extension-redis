@@ -40,6 +40,13 @@ export interface CacheProvider {
   setJson<T = any>(key: string, value: T, ttl?: number): Promise<void>;
 
   /**
+   * Checks if a key exists in the cache.
+   * @param key The cache key.
+   * @returns A promise resolving to true if the key exists, false if it does not.
+   */
+  exists(key: string): Promise<boolean>;
+
+  /**
    * Deletes one or more keys from the cache.
    * @param keys An array of keys to delete.
    * @returns A promise resolving when the deletion is complete.
@@ -53,6 +60,12 @@ export interface CacheProvider {
    * @returns A promise resolving when the pattern deletion is complete.
    */
   deletePattern(pattern: string): Promise<void>;
+
+  /**
+   * Flushes the entire cache.
+   * @returns A promise resolving when the flush is complete.
+   */
+  flushdb(): Promise<void>;
 
   /**
    * Disconnects the cache client.

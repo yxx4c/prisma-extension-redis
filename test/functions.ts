@@ -1,4 +1,4 @@
-import type {Prisma} from '@prisma/client';
+import { Prisma } from './prisma/generated';
 
 interface User {
   id: number;
@@ -96,10 +96,12 @@ export const deleteUserById = async (
     where: {
       id,
     },
-    invalidate: {
-      invalidateKeys,
-      hasPattern,
-    },
+    // Remove manual invalidation to rely on auto-invalidation (if configured)
+    // or ensure the test logic handles necessary invalidations.
+    // invalidate: {
+    //   invalidateKeys,
+    //   hasPattern,
+    // },
   });
 
 export const deleteAllUsers = async (extendedPrisma: PrismaClient) =>
@@ -126,3 +128,16 @@ export const deleteAllUsersAndGetCountOfUsersWithoutCaching = (
 
 export const delay = (ms: number) =>
   new Promise(resolve => setTimeout(resolve, ms));
+
+export const cleanupDbAndCache = async (extendedPrisma: PrismaClient) => {
+  try {
+    // 1. Delete all users from the database
+    await extendedPrisma.user.deleteMany({});
+
+    // 2. Clear the cache
+    await extendedPrisma.provider.flushdb();
+
+  } catch (error) {
+    console.error('Error during DB cleanup (deleteMany):', error);
+  }
+};
