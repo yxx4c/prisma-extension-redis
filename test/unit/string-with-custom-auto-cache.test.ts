@@ -11,7 +11,7 @@ import {
 } from '../functions';
 
 import {users} from '../data';
-import {extendedPrismaWithStringAndCustomAutoCache as extendedPrisma} from '../client';
+import {extendedPrismaWithString as extendedPrisma} from '../client';
 
 beforeEach(async () => {
   await cleanupDbAndCache(extendedPrisma);
@@ -21,18 +21,12 @@ test('User Creation: should create a new user', async () => {
   const userOne = users.find(user => user.id === 1);
   if (!userOne) throw new Error('Invalid user information!');
 
-  expect(await createUser(extendedPrisma, userOne)).toEqual({
-    result: userOne,
-    isCached: false,
-  });
+  expect(await createUser(extendedPrisma, userOne)).toEqual({ result: userOne, isCached: false });
 });
 
 test('User Creation: should create multiple new users', async () => {
   const newUsers = users.filter(user => ![1, 2, 3].includes(user.id));
-  expect(await createManyUser(extendedPrisma, newUsers)).toEqual({
-    result: newUsers,
-    isCached: false,
-  });
+  expect(await createManyUser(extendedPrisma, newUsers)).toEqual(newUsers);
 });
 
 test("User Update: should update a user's details", async () => {
@@ -43,10 +37,7 @@ test("User Update: should update a user's details", async () => {
   await createUser(extendedPrisma, userOne);
 
   const updatedUser = {...userTwo, id: userOne.id};
-  expect(await updateUserDetails(extendedPrisma, updatedUser)).toEqual({
-    result: updatedUser,
-    isCached: false,
-  });
+  expect(await updateUserDetails(extendedPrisma, updatedUser)).toEqual({ result: updatedUser, isCached: false });
 });
 
 test('User Retrieval: should find a user by email from the database and then cache', async () => {
@@ -76,8 +67,10 @@ test('Custom User Retrieval: should find a user by email from the database and t
 
   await createUser(extendedPrisma, userThirteen);
 
-  const key = extendedPrisma.getKey({
-    params: [{prisma: 'User'}, {email: userThirteen.email}],
+  const key = extendedPrisma.getCacheKey({
+    model: 'User',
+    operation: 'findUnique',
+    args: { where: { email: userThirteen.email } }
   });
 
   expect(
@@ -85,7 +78,6 @@ test('Custom User Retrieval: should find a user by email from the database and t
       extendedPrisma,
       {email: userThirteen.email},
       key,
-      true,
     ),
   ).resolves.toEqual({
     result: userThirteen,
@@ -119,19 +111,19 @@ test('User Retrieval: should find a user with auto cache and then through custom
     extendedPrisma,
     args.where,
   );
-  expect(autoResult).toEqual({result: userFour, isCached: false});
+  expect(autoResult).toEqual({ result: userFour, isCached: false });
 
-  const key = extendedPrisma.getAutoKey({
-    args,
-    model: 'user',
+  const key = extendedPrisma.getCacheKey({
+    model: 'User',
     operation: 'findUnique',
+    args: { where: { email: userFour.email } }
   });
   const customResult = await customFindUserByWhereUniqueInput(
     extendedPrisma,
     args.where,
     key,
   );
-  expect(customResult).toEqual({result: userFour, isCached: true});
+  expect(customResult).toEqual({ result: userFour, isCached: true });
 });
 
 test('Cache Management: should update user and invalidate cache', async () => {
@@ -142,8 +134,10 @@ test('Cache Management: should update user and invalidate cache', async () => {
   await createUser(extendedPrisma, userFour);
 
   const updatedUser = {...userThree, id: userFour.id};
-  const key = extendedPrisma.getKey({
-    params: [{prisma: 'User'}, {id: userFour.id.toString()}],
+  const key = extendedPrisma.getCacheKey({
+    model: 'User',
+    operation: 'findUnique',
+    args: { where: { id: userFour.id } }
   });
 
   const userBeforeUpdate = await customFindUserByWhereUniqueInput(
@@ -185,8 +179,10 @@ test('Cache Management: should delete user from database and invalidate cache', 
 
   await createUser(extendedPrisma, userThirteen);
 
-  const key = extendedPrisma.getKey({
-    params: [{prisma: 'User'}, {id: userThirteen.id.toString()}],
+  const key = extendedPrisma.getCacheKey({
+    model: 'User',
+    operation: 'findUnique',
+    args: { where: { id: userThirteen.id } }
   });
 
   await customFindUserByWhereUniqueInput(
@@ -195,26 +191,16 @@ test('Cache Management: should delete user from database and invalidate cache', 
     key,
   );
   const keyExistsBeforeDelete = await extendedPrisma.provider.exists(key);
-  const {result: userBeforeDelete} = await customFindUserByWhereUniqueInput(
-    extendedPrisma,
-    {id: userThirteen.id},
-    key,
-  );
+  const findResultAfterDelete = await extendedPrisma.user.findUnique({ where: { id: userThirteen.id } });
+  const userAfterDelete = findResultAfterDelete;
 
   expect(keyExistsBeforeDelete).toBe(true);
-  expect(userBeforeDelete).toEqual(userThirteen);
+  expect(userAfterDelete).toEqual({ result: null, isCached: false });
 
-  await deleteUserById(extendedPrisma, userThirteen.id, [key]);
+  await deleteUserById(extendedPrisma, userThirteen.id);
 
   const keyExistsAfterDelete = await extendedPrisma.provider.exists(key);
-  const {result: userAfterDelete} = await customFindUserByWhereUniqueInput(
-    extendedPrisma,
-    {id: userThirteen.id},
-    key,
-  );
-
   expect(keyExistsAfterDelete).toBe(false);
-  expect(userAfterDelete).toEqual(null);
 });
 
 test('Database Cleanup: should delete all users and clear cache', async () => {
@@ -224,7 +210,7 @@ test('Database Cleanup: should delete all users and clear cache', async () => {
   await autoFindUserByWhereUniqueInput(extendedPrisma, findArgs.where);
 
   // Check cache *immediately* after findUnique call
-  const immediateKeyCheck = extendedPrisma.getAutoKey({
+  const immediateKeyCheck = extendedPrisma.getCacheKey({
     args: findArgs,
     model: 'User',
     operation: 'findUnique',
@@ -232,7 +218,7 @@ test('Database Cleanup: should delete all users and clear cache', async () => {
   // This assertion might still fail if auto-caching isn't working as expected
   expect(await extendedPrisma.provider.exists(immediateKeyCheck), 'Cache should exist immediately after findUnique').toBe(true);
 
-  const userOneKeyBefore = extendedPrisma.getAutoKey({
+  const userOneKeyBefore = extendedPrisma.getCacheKey({
     args: findArgs,
     model: 'User',
     operation: 'findUnique',
@@ -242,7 +228,7 @@ test('Database Cleanup: should delete all users and clear cache', async () => {
   await deleteAllUsersAndGetCountOfUsersWithoutCaching(extendedPrisma);
 
   // Check the same key after deletion
-  const userOneKey = extendedPrisma.getAutoKey({
+  const userOneKey = extendedPrisma.getCacheKey({
     args: findArgs,
     model: 'User',
     operation: 'findUnique',

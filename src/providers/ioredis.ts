@@ -73,9 +73,8 @@ export class IoredisCacheProvider implements CacheProvider {
       stream.on('data', (keysChunk: string[]) => {
         accumulatedKeys.push(...keysChunk);
         if (accumulatedKeys.length >= 1000) {
-          // Process batch and clear
           const batchToProcess = [...accumulatedKeys];
-          accumulatedKeys.length = 0; // Clear the array
+          accumulatedKeys.length = 0;
 
           const pipeline = this.redis.pipeline();
           pipeline.unlink(batchToProcess);
@@ -84,8 +83,7 @@ export class IoredisCacheProvider implements CacheProvider {
               'Error during periodic pattern delete (pipeline):',
               err,
             );
-            // Decide if we should reject or just log
-            reject(err); // Rejecting for now
+            reject(err);
           });
         }
       });

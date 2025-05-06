@@ -23,10 +23,7 @@ test('User Creation: should create a new user', async () => {
 
   expect(
     createUser(extendedPrisma, userOne),
-  ).resolves.toEqual({
-    result: userOne,
-    isCached: false,
-  });
+  ).resolves.toEqual(userOne);
 });
 
 // TODO: Investigate extension source - Invalid cacheType doesn't cause rejection
@@ -72,10 +69,12 @@ test.skip('Custom User Retrieval: should fail when finding a user by email from 
     customFindUserByWhereUniqueInput(
       extendedPrisma,
       {email: userThirteen.email},
-      extendedPrisma.getKey({
-        params: [{prisma: 'User'}, {email: userThirteen.email}],
+      extendedPrisma.getCacheKey({
+        model: 'User',
+        operation: 'findUnique',
+        args: { where: { email: userThirteen.email } }
       }),
-      true,
+      60,
     ),
   ).rejects.toThrow(
     'Incorrect CacheType provided! Supported values: JSON | STRING',

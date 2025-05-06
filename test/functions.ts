@@ -1,13 +1,13 @@
+import { extendedPrismaWithJson } from './client';
 import { Prisma } from './prisma/generated';
 
-interface User {
+export interface User {
   id: number;
   name: string;
   email: string;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: <To use different type of client config>
-type PrismaClient = any;
+export type PrismaClient = typeof extendedPrismaWithJson;
 
 export const createUser = async (extendedPrisma: PrismaClient, user: User) =>
   await extendedPrisma.user.create({
@@ -71,13 +71,14 @@ export const customFindUserByWhereUniqueInput = async (
   extendedPrisma: PrismaClient,
   where: Prisma.UserWhereUniqueInput,
   key: string,
-  infinite = false,
-) =>
-  await extendedPrisma.user.findUnique({
+  ttl?: number,
+) => {
+  const ttlValue = ttl ?? 60;
+  return await extendedPrisma.user.findUnique({
     where,
     cache: {
       key,
-      ...(infinite ? {ttl: Number.POSITIVE_INFINITY} : {}),
+      ttl: ttlValue,
     },
     select: {
       id: true,
@@ -85,24 +86,35 @@ export const customFindUserByWhereUniqueInput = async (
       email: true,
     },
   });
+};
 
 export const deleteUserById = async (
   extendedPrisma: PrismaClient,
   id: number,
-  invalidateKeys: string[],
-  hasPattern = false,
 ) =>
   await extendedPrisma.user.delete({
     where: {
       id,
     },
-    // Remove manual invalidation to rely on auto-invalidation (if configured)
-    // or ensure the test logic handles necessary invalidations.
-    // invalidate: {
-    //   invalidateKeys,
-    //   hasPattern,
-    // },
   });
+
+export const deleteUserByIdWithInvalidate = async (
+  extendedPrisma: PrismaClient,
+  id: number,
+  invalidateKeys: string[],
+  hasPattern = false,
+) => {
+  await extendedPrisma.user.delete({
+    where: {
+      id,
+    },
+    invalidate: {
+      invalidateKeys,
+      hasPattern,
+    },
+  });
+};
+
 
 export const deleteAllUsers = async (extendedPrisma: PrismaClient) =>
   await extendedPrisma.user.deleteMany({

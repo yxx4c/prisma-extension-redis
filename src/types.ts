@@ -6,8 +6,6 @@ import type {
 } from '@prisma/client/runtime/library';
 import type {CacheProvider} from './providers/interface';
 
-import type {CacheCase} from './key';
-
 export const ALL_OPERATIONS = [
   '$executeRaw',
   '$executeRawUnsafe',
@@ -47,25 +45,6 @@ export const DISABLED_OPERATIONS = [
 
 export type DisabledOperation = (typeof DISABLED_OPERATIONS)[number];
 
-export const AUTO_REQUIRED_ARG_OPERATIONS = [
-  'findUnique',
-  'findUniqueOrThrow',
-  'groupBy',
-] as const satisfies ReadonlyArray<Operation>;
-
-export const AUTO_OPTIONAL_ARG_OPERATIONS = [
-  'count',
-  'findFirst',
-  'findFirstOrThrow',
-  'findMany',
-] as const satisfies ReadonlyArray<Operation>;
-
-export const AUTO_OPERATIONS = [
-  ...AUTO_REQUIRED_ARG_OPERATIONS,
-  ...AUTO_OPTIONAL_ARG_OPERATIONS,
-] as const;
-export type AutoOperations = (typeof AUTO_OPERATIONS)[number];
-
 export const CACHE_REQUIRED_ARG_OPERATIONS = [
   'findUnique',
   'findUniqueOrThrow',
@@ -103,45 +82,14 @@ export const INVALIDATE_OPERATIONS = [
   ...INVALIDATE_OPTIONAL_ARG_OPERATIONS,
 ] as const;
 
-export interface CacheOptionsWithStale {
-  /**
-   * Key for caching
-   */
-  key: string;
-
-  /**
-   * Custom time-to-live (ttl) value.
-   * If undefined, key stays in cache till uncached
-   */
-  ttl?: number;
-
-  /**
-   * Custom stale value.
-   * Stale cannot be set without ttl
-   */
-  stale?: never;
-}
-
-export interface CacheOptionsWithoutStale {
-  /**
-   * Key for caching
-   */
-  key: string;
-
-  /**
-   * Custom time-to-live (ttl) value.
-   * If undefined, key stays in cache till uncached
-   */
-  ttl: number;
-
-  /**
-   * Custom stale value.
-   * If undefined, stale is zero
-   */
-  stale?: number;
-}
-
-export type CacheOptions = CacheOptionsWithStale | CacheOptionsWithoutStale;
+/** Options for custom cache behavior passed directly in query arguments */
+export type CacheOptions =
+  | false // Explicitly disable cache for this query
+  | {
+      key: string; // Specific key to use
+      ttl?: number; // Optional specific TTL for this key
+      stale?: number; // Optional specific stale time
+    };
 
 export interface InvalidateOptions {
   /**
@@ -154,10 +102,6 @@ export interface InvalidateOptions {
    */
   hasPattern?: boolean;
 }
-
-type PrismaAutoArgs = {
-  cache?: boolean;
-};
 
 type PrismaCacheArgs = {
   cache?: CacheOptions;
@@ -175,16 +119,6 @@ type CacheResultPromise<T, A, O extends Operation> = Promise<{
 type InvalidateResultPromise<T, A, O extends Operation> = Promise<{
   result: Prisma.Result<T, A, O>;
 }>;
-
-type AutoRequiredArgsFunction<O extends Operation> = <T, A>(
-  this: T,
-  args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>,
-) => CacheResultPromise<T, A, O>;
-
-type AutoOptionalArgsFunction<O extends Operation> = <T, A>(
-  this: T,
-  args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>,
-) => CacheResultPromise<T, A, O>;
 
 type CacheRequiredArgsFunction<O extends Operation> = <T, A>(
   this: T,
@@ -216,24 +150,15 @@ type OperationsConfig<
 
 type ModelExtension<
   Config extends OperationsConfig<Operation[], Operation[]>,
-  M extends 'auto' | 'cache' | 'invalidate',
+  M extends 'cache' | 'invalidate',
 > = {
-  [RO in Config['requiredArg'][number]]: M extends 'auto'
-    ? AutoRequiredArgsFunction<RO>
-    : M extends 'cache'
-      ? CacheRequiredArgsFunction<RO>
-      : InvalidateRequiredArgsFunction<RO>;
+  [RO in Config['requiredArg'][number]]: M extends 'cache'
+    ? CacheRequiredArgsFunction<RO>
+    : InvalidateRequiredArgsFunction<RO>;
 } & {
-  [OO in Config['optionalArg'][number]]: M extends 'auto'
-    ? AutoOptionalArgsFunction<OO>
-    : M extends 'cache'
-      ? CacheOptionalArgsFunction<OO>
-      : InvalidateOptionalArgsFunction<OO>;
-};
-
-type InternalAutoConfig = {
-  requiredArg: (typeof AUTO_REQUIRED_ARG_OPERATIONS)[number][];
-  optionalArg: (typeof AUTO_OPTIONAL_ARG_OPERATIONS)[number][];
+  [OO in Config['optionalArg'][number]]: M extends 'cache'
+    ? CacheOptionalArgsFunction<OO>
+    : InvalidateOptionalArgsFunction<OO>;
 };
 
 type InternalCacheConfig = {
@@ -246,8 +171,7 @@ type InternalInvalidateConfig = {
   optionalArg: (typeof INVALIDATE_OPTIONAL_ARG_OPERATIONS)[number][];
 };
 
-export type ExtendedModel = ModelExtension<InternalAutoConfig, 'auto'> &
-  ModelExtension<InternalCacheConfig, 'cache'> &
+export type ExtendedModel = ModelExtension<InternalCacheConfig, 'cache'> &
   ModelExtension<InternalInvalidateConfig, 'invalidate'>;
 
 export type CacheType = 'JSON' | 'STRING';
@@ -260,14 +184,7 @@ export type CacheKey = {
   delimiter?: string;
 
   /**
-   * Use CacheCase to set how the generated INBUILT type keys are formatted
-   * Formatting strips non alpha-numeric characters
-   * Default value: CacheCase.SNAKE_CASE
-   */
-  case?: CacheCase;
-
-  /**
-   * AutoCache key prefix
+   * The key prefix
    * Default value: 'prisma'
    */
   prefix?: string;
@@ -284,9 +201,8 @@ interface Logger {
   error: (input: LoggerInput) => void;
 }
 
-export type CacheConfig = {
-  auto: AutoCacheConfig;
-
+/** Configuration passed when initializing the extension */
+export interface CacheConfig {
   /**
    * Redis Cache Type (Redis instance must support JSON module to use JSON)
    */
@@ -295,7 +211,7 @@ export type CacheConfig = {
   /**
    * Inbuilt cache key generation config
    */
-  cacheKey?: CacheKey;
+  key?: CacheKey;
 
   /**
    * Default time-to-live (ttl) value
@@ -326,7 +242,7 @@ export type CacheConfig = {
   defaultCache?: boolean;
   /** Enable automatic cache invalidation on mutations. Default: true */
   autoInvalidate?: boolean;
-};
+}
 
 export interface ModelConfig {
   /**
@@ -337,10 +253,10 @@ export interface ModelConfig {
   /**
    * Excluded cache operations
    */
-  excludedOperations?: AutoOperations[];
+  excluded?: Operation[];
 
   /**
-   * Auto - stale time after ttl
+   * Stale time after ttl
    */
   stale?: number;
 
@@ -349,35 +265,6 @@ export interface ModelConfig {
    */
   ttl?: number;
 }
-
-export type AutoCacheConfig =
-  | {
-      /**
-       * Default excluded models
-       */
-      excludedModels?: string[];
-
-      /**
-       * Default excluded cache operations
-       */
-      excludedOperations?: AutoOperations[];
-
-      /**
-       * Default model configuration
-       */
-      models?: ModelConfig[];
-
-      /**
-       * Auto stale time after ttl
-       */
-      stale?: number;
-
-      /**
-       * Auto time-to-live (ttl) value
-       */
-      ttl?: number;
-    }
-  | boolean;
 
 export interface PrismaExtensionRedisOptions {
   /**
@@ -434,11 +321,6 @@ export type ActionParams = {
 
 export type ActionCheckParams = {
   /**
-   * Auto cache config
-   */
-  auto?: AutoCacheConfig;
-
-  /**
    * Model query options
    */
   options: ModelQueryOptionsCbArgs;
@@ -481,23 +363,6 @@ export type CacheKeyParams = {
   operation?: Operation;
 };
 
-export type CacheAutoKeyParams = {
-  /**
-   * Query args
-   */
-  args: JsArgs;
-
-  /**
-   * Model name
-   */
-  model: string;
-
-  /**
-   * Operation name
-   */
-  operation: Operation;
-};
-
 export type CacheKeyPatternParams = {
   /**
    * Key params to generate key
@@ -514,3 +379,9 @@ export type CacheKeyPatternParams = {
    */
   operation?: Operation;
 };
+
+export const isPrimitive = (value: unknown): boolean => {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+};
+
+export type { CacheProvider };
