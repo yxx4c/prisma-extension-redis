@@ -1,80 +1,59 @@
-import {PrismaClient} from '@prisma/client';
+import {PrismaClient} from './prisma/generated';
 import {
-  type AutoCacheConfig,
   type CacheConfig,
   PrismaExtensionRedis,
-  type RedisOptions,
+  IovalkeyCacheProvider,
 } from '../src';
+import type {RedisOptions} from 'iovalkey';
 
-const client = process.env.REDIS_SERVICE_URI as RedisOptions;
+const options = process.env.REDIS_SERVICE_URI as RedisOptions;
 
-const auto: AutoCacheConfig = {
-  excludedModels: ['Post'],
-  excludedOperations: ['findFirst'],
-  models: [
-    {
-      model: 'User',
-      excludedOperations: [],
-      ttl: 120,
-      stale: 30,
-    },
-  ],
-  ttl: 30,
-};
-
-const config: CacheConfig = {
+export const config: CacheConfig = {
   ttl: 60,
   stale: 30,
-  auto,
   type: 'JSON',
 };
 
+export const provider = new IovalkeyCacheProvider(options);
+
 export const prisma = new PrismaClient();
 
-export const extendedPrismaWithJsonAndCustomAutoCache = prisma.$extends(
-  PrismaExtensionRedis({config, client}),
-);
-
-export const extendedPrismaWithJsonAndAutoCacheTrue = prisma.$extends(
+export const extendedPrismaWithJson = prisma.$extends(
   PrismaExtensionRedis({
-    config: {
-      ...config,
-      auto: true,
-    },
-    client,
+    config: {...config, type: 'JSON'},
+    provider,
   }),
 );
 
-export const extendedPrismaWithStringAndCustomAutoCache = prisma.$extends(
+export const extendedPrismaWithString = prisma.$extends(
   PrismaExtensionRedis({
-    config: {
-      ...config,
-      type: 'STRING',
-    },
-    client,
+    config: {...config, type: 'STRING'},
+    provider,
   }),
 );
 
-export const extendedPrismaWithStringAndAutoCacheTrue = prisma.$extends(
+export const extendedPrismaWithDefaultCacheFalse = prisma.$extends(
   PrismaExtensionRedis({
-    config: {
-      ...config,
-      type: 'STRING',
-      auto: true,
-    },
-    client,
+    config: {...config, defaultCache: false},
+    provider,
+  }),
+);
+
+export const extendedPrismaWithAutoInvalidateFalse = prisma.$extends(
+  PrismaExtensionRedis({
+    config: {...config, autoInvalidate: false},
+    provider,
   }),
 );
 
 export const extendedPrismaWithExtendedStale = prisma.$extends(
   PrismaExtensionRedis({
     config: {
-      auto: true,
       stale: 300,
       ttl: 1,
       type: 'JSON',
     },
-    client,
+    provider,
   }),
 );
 
@@ -82,9 +61,9 @@ export const extendedPrismaWithInvalidCacheType = prisma.$extends(
   PrismaExtensionRedis({
     config: {
       ...config,
-      // @ts-ignore: Intnetionally using invalid type for testing
+      // @ts-ignore: Intentionally using invalid type for testing
       type: 'INVALID',
     },
-    client,
+    provider,
   }),
 );

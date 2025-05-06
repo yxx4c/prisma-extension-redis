@@ -5,18 +5,24 @@ import {
   CacheCase,
   type CacheConfig,
   PrismaExtensionRedis,
+  IovalkeyCacheProvider,
 } from 'prisma-extension-redis';
 import {SuperJSON} from 'superjson';
+import {Redis} from 'iovalkey';
 
 import {users} from './data';
 import env from './env';
 import {getRandomValue} from './utils';
 
-// Create a Redis client
-const client = {
+// Create a Redis client instance for the provider
+const redis = new Redis({
   host: env.REDIS_HOST_NAME, // Specify Redis host name
   port: env.REDIS_PORT, // Specify Redis port
-};
+  // Add other iovalkey options if needed
+});
+
+// Instantiate the Cache Provider
+const provider = new IovalkeyCacheProvider(redis);
 
 // Create a pino logger instance for logging
 const logger = pino();
@@ -40,23 +46,24 @@ const config: CacheConfig = {
   stale: 30, // Default Stale time after ttl in seconds
   auto,
   logger, // Logger for cache events
-  // transformer: {
-  //   // Use, main serialize and deserialize function for additional functionality if required
-  //   deserialize: data => SuperJSON.parse(data), // default value of deserialize function
-  //   serialize: data => SuperJSON.stringify(data), // default value of serialize function
-  // },
-  // onHit: (key: string) => console.log(`FOUND CACHE: ${key}`),
-  // onMiss: (key: string) => console.log(`NOT FOUND CACHE: ${key}`),
+  defaultCache: true, // Explicitly set default caching behavior
+  autoInvalidate: true, // Explicitly set auto-invalidation behavior
+  transformer: {
+    // Use SuperJSON for serialization/deserialization
+    deserialize: data => SuperJSON.parse(data),
+    serialize: data => SuperJSON.stringify(data),
+  },
   type: 'JSON', // the redis instance must support JSON module if you chose to use JSON type cache
-  // cacheKey: {
-  // case: CacheCase.CAMEL_CASE,
-  // delimiter: '*',
-  // prefix: 'awesomeness',
-  // },
+  cacheKey: {
+    // Example cache key customization
+    case: CacheCase.SNAKE_CASE,
+    delimiter: ':',
+    prefix: 'example',
+  },
 };
 
 const prisma = new PrismaClient();
-const extendedPrisma = prisma.$extends(PrismaExtensionRedis({config, client}));
+const extendedPrisma = prisma.$extends(PrismaExtensionRedis({config, provider}));
 
 const resultSourceString = (isCached: boolean) =>
   isCached ? 'CACHE' : 'DATABASE';
@@ -74,9 +81,10 @@ const main = async () => {
           email: user.email,
         },
         update: {},
-        // at the moment you cannot cache during upsert, uncache works normal, as below!
-        uncache: {
-          uncacheKeys: ['*'], // USING WILDCARD '*' - DANGEROUS OPERATION - DELETES EVERYTHING FROM CACHE
+        // Use 'invalidate' instead of 'uncache'
+        // Use 'invalidateKeys' instead of 'uncacheKeys'
+        invalidate: {
+          invalidateKeys: ['*'], // USING WILDCARD '*' - DANGEROUS OPERATION - DELETES EVERYTHING FROM CACHE
           hasPattern: true,
         },
       }),
@@ -150,9 +158,12 @@ const main = async () => {
   await extendedPrisma.user
     .delete({
       where: {id: userOne.id},
-      uncache: {
-        uncacheKeys: [
+      // Use 'invalidate' instead of 'uncache'
+      // Use 'invalidateKeys' instead of 'uncacheKeys'
+      invalidate: {
+        invalidateKeys: [
           extendedPrisma.getKey({
+            // Ensure cacheKey prefix/delimiter match config if used here
             params: [{prisma: 'User'}, {email: userOne.email}],
           }),
         ],
@@ -169,9 +180,12 @@ const main = async () => {
     .update({
       where: {email: userTwo.email},
       data: {name: userOne.name},
-      uncache: {
-        uncacheKeys: [
+      // Use 'invalidate' instead of 'uncache'
+      // Use 'invalidateKeys' instead of 'uncacheKeys'
+      invalidate: {
+        invalidateKeys: [
           extendedPrisma.getKey({
+            // Ensure cacheKey prefix/delimiter match config if used here
             params: [{prisma: 'User'}, {email: userOne.email}],
           }),
         ],

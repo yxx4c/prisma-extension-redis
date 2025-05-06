@@ -1,10 +1,17 @@
-export type {RedisOptions} from 'iovalkey';
-export {PrismaExtensionRedis} from './prismaExtensionRedis';
+export {PrismaExtensionRedis} from './extension';
 export type {
-  AutoCacheConfig,
   CacheConfig,
+  CacheKey,
+  CacheKeyParams,
+  CacheKeyPatternParams,
   CacheOptions,
-  UncacheOptions,
+  CacheType,
+  InvalidateOptions,
+  ModelConfig,
+  PrismaExtensionRedisOptions,
 } from './types';
-export {filterOperations, unlinkPatterns} from './cacheUncache';
-export {CacheCase} from './cacheKey';
+export {filterOperations, unlinkPatterns} from './invalidate';
+
+export type {CacheProvider} from './providers/interface';
+export {IovalkeyCacheProvider} from './providers/iovalkey';
+export {IoredisCacheProvider} from './providers/ioredis';

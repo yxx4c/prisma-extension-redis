@@ -1,21 +1,23 @@
-import type {Prisma} from '@prisma/client';
+import { extendedPrismaWithJson } from './client';
+import { Prisma } from './prisma/generated';
 
-interface User {
+export interface User {
   id: number;
   name: string;
   email: string;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: <To use different type of client config>
-type PrismaClient = any;
+export type PrismaClient = typeof extendedPrismaWithJson;
 
 export const createUser = async (extendedPrisma: PrismaClient, user: User) =>
   await extendedPrisma.user.create({
     data: user,
-    uncache: {
-      uncacheKeys: ['*'],
-      hasPattern: true,
-    },
+    // Auto-invalidation should handle this, manual invalidation might not be needed here
+    // Keeping it commented out for now, review if needed for specific tests
+    // invalidate: {
+    //   invalidateKeys: ['*'],
+    //   hasPattern: true,
+    // },
     select: {
       id: true,
       name: true,
@@ -39,7 +41,7 @@ export const createManyUser = async (
 export const updateUserDetails = async (
   extendedPrisma: PrismaClient,
   user: User,
-  uncache?: {uncacheKeys: string[]; hasPattern?: boolean},
+  invalidate?: {invalidateKeys: string[]; hasPattern?: boolean},
 ) =>
   await extendedPrisma.user.update({
     where: {id: user.id},
@@ -49,7 +51,7 @@ export const updateUserDetails = async (
       name: true,
       email: true,
     },
-    uncache,
+    invalidate,
   });
 
 export const autoFindUserByWhereUniqueInput = async (
@@ -69,13 +71,14 @@ export const customFindUserByWhereUniqueInput = async (
   extendedPrisma: PrismaClient,
   where: Prisma.UserWhereUniqueInput,
   key: string,
-  infinite = false,
-) =>
-  await extendedPrisma.user.findUnique({
+  ttl?: number,
+) => {
+  const ttlValue = ttl ?? 60;
+  return await extendedPrisma.user.findUnique({
     where,
     cache: {
       key,
-      ...(infinite ? {ttl: Number.POSITIVE_INFINITY} : {}),
+      ttl: ttlValue,
     },
     select: {
       id: true,
@@ -83,27 +86,40 @@ export const customFindUserByWhereUniqueInput = async (
       email: true,
     },
   });
+};
 
 export const deleteUserById = async (
   extendedPrisma: PrismaClient,
   id: number,
-  uncacheKeys: string[],
-  hasPattern = false,
 ) =>
   await extendedPrisma.user.delete({
     where: {
       id,
     },
-    uncache: {
-      uncacheKeys,
+  });
+
+export const deleteUserByIdWithInvalidate = async (
+  extendedPrisma: PrismaClient,
+  id: number,
+  invalidateKeys: string[],
+  hasPattern = false,
+) => {
+  await extendedPrisma.user.delete({
+    where: {
+      id,
+    },
+    invalidate: {
+      invalidateKeys,
       hasPattern,
     },
   });
+};
+
 
 export const deleteAllUsers = async (extendedPrisma: PrismaClient) =>
   await extendedPrisma.user.deleteMany({
-    uncache: {
-      uncacheKeys: [extendedPrisma.getKeyPattern({params: [{prisma: '*'}]})],
+    invalidate: {
+      invalidateKeys: [extendedPrisma.getKeyPattern({params: [{prisma: '*'}]})],
       hasPattern: true,
     },
   });
@@ -124,3 +140,16 @@ export const deleteAllUsersAndGetCountOfUsersWithoutCaching = (
 
 export const delay = (ms: number) =>
   new Promise(resolve => setTimeout(resolve, ms));
+
+export const cleanupDbAndCache = async (extendedPrisma: PrismaClient) => {
+  try {
+    // 1. Delete all users from the database
+    await extendedPrisma.user.deleteMany({});
+
+    // 2. Clear the cache
+    await extendedPrisma.provider.flushdb();
+
+  } catch (error) {
+    console.error('Error during DB cleanup (deleteMany):', error);
+  }
+};
