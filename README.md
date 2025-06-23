@@ -213,6 +213,24 @@ extendedPrisma.user.update({
 });
 ```
 
+### Direct Cache Invalidation
+
+Cache invalidation can also be performed directly using the `uncache` method, allowing you to uncache without needing to perform a database operation.
+
+**Example of Direct Cache Invalidation:**
+
+```javascript
+// Invalidate cache when updating a user's information
+extendedPrisma.uncache({
+    uncacheKeys: [
+      extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] }), // Specific key to invalidate
+      extendedPrisma.getKeyPattern({ params: [{ prisma: '*' }, { id: userId }]}), // Pattern for wildcard invalidation
+      extendedPrisma.getKeyPattern({ params: [{ prisma: 'Post' }, { id: userId }, { glob: '*' }]}), // Use glob for more complex patterns
+    ],
+    hasPattern: true, // Use pattern matching for invalidation
+});
+```
+
 **Explanation of Cache Invalidation:**
 
 - **`uncacheKeys`**: Specifies the keys or patterns to be invalidated.

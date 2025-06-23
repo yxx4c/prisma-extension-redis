@@ -8,10 +8,11 @@ import {
   isAutoCacheEnabled,
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
+	uncacheAction
 } from './cacheUncache';
 import {getAutoKeyGen, getKeyGen, getKeyPatternGen} from './cacheKey';
 
-import type {ExtendedModel, PrismaExtensionRedisOptions} from './types';
+import type {ExtendedModel, PrismaExtensionRedisOptions, UncacheOptions} from './types';
 
 export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   const {
@@ -27,6 +28,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   const getKey = getKeyGen(delimiter, cacheCase, prefix);
   const getAutoKey = getAutoKeyGen(getKey);
   const getKeyPattern = getKeyPatternGen(delimiter, cacheCase, prefix);
+  const uncache = (args: UncacheOptions) => uncacheAction(redis, args)
 
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',
@@ -35,6 +37,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
       getKey,
       getKeyPattern,
       getAutoKey,
+	  uncache
     },
     model: {
       $allModels: {} as ExtendedModel,

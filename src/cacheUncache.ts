@@ -1,5 +1,6 @@
 import micromatch from 'micromatch';
 import {coalesceAsync} from 'promise-coalesce';
+import {type Redis} from 'iovalkey'
 
 import type {Operation} from '@prisma/client/runtime/library';
 
@@ -212,6 +213,23 @@ export const customCacheAction = async ({
   });
 };
 
+export const uncacheAction = async (redis: Redis, {uncacheKeys, hasPattern}: UncacheOptions) => {
+	if (hasPattern) {
+		const patternKeys = micromatch(uncacheKeys, ['*\\**', '*\\?*']);
+		const plainKeys = micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']);
+
+		const unlinkPromises = [
+			...unlinkPatterns({
+				redis,
+				patterns: patternKeys,
+			}),
+			...(plainKeys.length ? [redis.unlink(plainKeys)] : []),
+		];
+
+		await Promise.all(unlinkPromises);
+	} else await redis.unlink(uncacheKeys);
+}
+
 export const customUncacheAction = async ({
   redis,
   options: {args, query},
@@ -219,20 +237,7 @@ export const customUncacheAction = async ({
 }: ActionParams) => {
   const {uncacheKeys, hasPattern} = args.uncache as unknown as UncacheOptions;
 
-  if (hasPattern) {
-    const patternKeys = micromatch(uncacheKeys, ['*\\**', '*\\?*']);
-    const plainKeys = micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']);
-
-    const unlinkPromises = [
-      ...unlinkPatterns({
-        redis,
-        patterns: patternKeys,
-      }),
-      ...(plainKeys.length ? [redis.unlink(plainKeys)] : []),
-    ];
-
-    await Promise.all(unlinkPromises);
-  } else await redis.unlink(uncacheKeys);
+	await uncacheAction(redis, {uncacheKeys, hasPattern});
 
   return {result: await query({...args, uncache: undefined})};
 };
