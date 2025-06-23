@@ -71,9 +71,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
               config,
             });
 
-          return {
-            result: await query({...args, cache: undefined}),
-          };
+          return await query({...args, cache: undefined})
         },
       },
     },
