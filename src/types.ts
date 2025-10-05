@@ -1,3 +1,5 @@
+export type {Redis} from 'iovalkey';
+
 import type {Prisma} from '@prisma/client/extension';
 import type {
   JsArgs,
@@ -5,8 +7,6 @@ import type {
   Operation,
 } from '@prisma/client/runtime/library';
 import type {Redis, RedisOptions} from 'iovalkey';
-
-import type {CacheCase} from './cacheKey';
 
 export const ALL_OPERATIONS = [
   '$executeRaw',
@@ -167,34 +167,89 @@ type PrismaUncacheArgs = {
   uncache?: UncacheOptions;
 };
 
-type CacheResultPromise<T, A, O extends Operation> = Promise<{
-  result: Prisma.Result<T, A, O>;
+type UnCacheResultPromise<T, A, O extends Operation> = Promise<
+  Prisma.Result<T, A, O>
+>;
+
+type PrismaMetaArg = {
+  meta?: boolean;
+};
+
+export type CacheSource = 'cache' | 'stale-cache' | 'db';
+
+type Meta<T, A, O extends Operation> = {
+  cachedAt: number;
+  expiresAt: number;
   isCached: boolean;
-}>;
+  key: string;
+  recache: () => Promise<ResultWithMeta<T, A, O>>;
+  source: CacheSource;
+  staleUntil: number;
+  uncache: () => Promise<{deleted: number}>;
+};
 
-type UnCacheResultPromise<T, A, O extends Operation> = Promise<{
+type ResultWithMeta<T, A, O extends Operation> = {
   result: Prisma.Result<T, A, O>;
-}>;
+  meta: Meta<T, A, O>;
+};
 
-type AutoRequiredArgsFunction<O extends Operation> = <T, A>(
-  this: T,
-  args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>,
-) => CacheResultPromise<T, A, O>;
+type ResultPlain<T, A, O extends Operation> = Prisma.Result<T, A, O>;
 
-type AutoOptionalArgsFunction<O extends Operation> = <T, A>(
-  this: T,
-  args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs>,
-) => CacheResultPromise<T, A, O>;
+interface AutoRequiredArgsFunction<O extends Operation> {
+  <T, A>(
+    this: T,
+    args: Prisma.Exact<
+      A,
+      Prisma.Args<T, O> & PrismaAutoArgs & PrismaMetaArg & {meta: true}
+    >,
+  ): Promise<ResultWithMeta<T, A, O>>;
+  <T, A>(
+    this: T,
+    args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs & PrismaMetaArg>,
+  ): Promise<ResultPlain<T, A, O>>;
+}
 
-type CacheRequiredArgsFunction<O extends Operation> = <T, A>(
-  this: T,
-  args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs>,
-) => CacheResultPromise<T, A, O>;
+interface AutoOptionalArgsFunction<O extends Operation> {
+  <T, A>(
+    this: T,
+    args: Prisma.Exact<
+      A,
+      Prisma.Args<T, O> & PrismaAutoArgs & PrismaMetaArg & {meta: true}
+    >,
+  ): Promise<ResultWithMeta<T, A, O>>;
+  <T, A>(
+    this: T,
+    args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaAutoArgs & PrismaMetaArg>,
+  ): Promise<ResultPlain<T, A, O>>;
+}
 
-type CacheOptionalArgsFunction<O extends Operation> = <T, A>(
-  this: T,
-  args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs>,
-) => CacheResultPromise<T, A, O>;
+interface CacheRequiredArgsFunction<O extends Operation> {
+  <T, A>(
+    this: T,
+    args: Prisma.Exact<
+      A,
+      Prisma.Args<T, O> & PrismaCacheArgs & PrismaMetaArg & {meta: true}
+    >,
+  ): Promise<ResultWithMeta<T, A, O>>;
+  <T, A>(
+    this: T,
+    args: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs & PrismaMetaArg>,
+  ): Promise<ResultPlain<T, A, O>>;
+}
+
+interface CacheOptionalArgsFunction<O extends Operation> {
+  <T, A>(
+    this: T,
+    args: Prisma.Exact<
+      A,
+      Prisma.Args<T, O> & PrismaCacheArgs & PrismaMetaArg & {meta: true}
+    >,
+  ): Promise<ResultWithMeta<T, A, O>>;
+  <T, A>(
+    this: T,
+    args?: Prisma.Exact<A, Prisma.Args<T, O> & PrismaCacheArgs & PrismaMetaArg>,
+  ): Promise<ResultPlain<T, A, O>>;
+}
 
 type UncacheRequiredArgsFunction<O extends Operation> = <T, A>(
   this: T,
@@ -252,6 +307,8 @@ export type ExtendedModel = ModelExtension<autoConfig, 'auto'> &
 
 export type CacheType = 'JSON' | 'STRING';
 
+export type caseTransformer = (str: string) => string;
+
 export type CacheKey = {
   /**
    * Cache key delimiter
@@ -260,11 +317,11 @@ export type CacheKey = {
   delimiter?: string;
 
   /**
-   * Use CacheCase to set how the generated INBUILT type keys are formatted
-   * Formatting strips non alpha-numeric characters
-   * Default value: CacheCase.SNAKE_CASE
+   * Function to transform the case of cache key.
+   * If not provided, snake_case is used by default.
+   * Supply a custom function to use a different case style.
    */
-  case?: CacheCase;
+  caseTransformer?: caseTransformer;
 
   /**
    * AutoCache key prefix
@@ -272,17 +329,6 @@ export type CacheKey = {
    */
   prefix?: string;
 };
-
-interface LoggerInput {
-  msg: string;
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-  [key: string]: any;
-}
-interface Logger {
-  debug: (input: LoggerInput) => void;
-  warn: (input: LoggerInput) => void;
-  error: (input: LoggerInput) => void;
-}
 
 export type CacheConfig = {
   auto: AutoCacheConfig;
@@ -308,17 +354,25 @@ export type CacheConfig = {
   stale: number;
 
   /**
-   * Custom transfomrer for serializing and deserializing data
+   * Chunk size for batch operations (e.g., pattern-based key deletion)
+   * Default value: 1000
+   */
+  chunkSize?: number;
+
+  /**
+   * Maximum number of concurrent batches
+   * Default value: 5
+   */
+  maxConcurrentBatches?: number;
+
+  /**
+   * Custom transformer for serializing and deserializing data
    */
   transformer?: {
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-    serialize: (data: any) => any;
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-    deserialize: (data: any) => any;
+    serialize: (data: unknown) => string;
+    deserialize: (data: unknown) => unknown;
   };
-  logger?: Logger;
-  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-  onError?: (error: any) => void;
+  onError?: (error: unknown) => void;
   onHit?: (key: string) => void;
   onMiss?: (key: string) => void;
 };
@@ -396,6 +450,16 @@ export type DeletePatterns = {
    * Patterns for key deletion
    */
   patterns: string[];
+
+  /**
+   * Chunk size for batch operations
+   */
+  chunkSize?: number;
+
+  /**
+   * Maximum number of concurrent batches
+   */
+  maxConcurrentBatches?: number;
 };
 
 export type ActionParams = {
@@ -449,8 +513,8 @@ export type GetDataParams = {
 
 export type CacheContext = {
   isCached: boolean;
-  // biome-ignore lint/suspicious/noExplicitAny: <Any Result>
-  result: any;
+  // result can be any Prisma query result type
+  result: unknown;
   stale: number;
   timestamp: number;
   ttl: number;

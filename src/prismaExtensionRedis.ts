@@ -1,6 +1,6 @@
 import {Prisma} from '@prisma/client/extension';
 import Redis from 'iovalkey';
-
+import {getAutoKeyGen, getKeyGen, getKeyPatternGen} from './cacheKey';
 import {
   autoCacheAction,
   customCacheAction,
@@ -9,7 +9,6 @@ import {
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
 } from './cacheUncache';
-import {getAutoKeyGen, getKeyGen, getKeyPatternGen} from './cacheKey';
 
 import type {ExtendedModel, PrismaExtensionRedisOptions} from './types';
 
@@ -20,13 +19,13 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
     client: redisOptions,
   } = options;
 
-  const {delimiter, case: cacheCase, prefix} = cacheKey ?? {};
+  const {delimiter, caseTransformer, prefix} = cacheKey ?? {};
 
   const redis = new Redis(redisOptions);
 
-  const getKey = getKeyGen(delimiter, cacheCase, prefix);
+  const getKey = getKeyGen(delimiter, caseTransformer, prefix);
   const getAutoKey = getAutoKeyGen(getKey);
-  const getKeyPattern = getKeyPatternGen(delimiter, cacheCase, prefix);
+  const getKeyPattern = getKeyPatternGen(delimiter, caseTransformer, prefix);
 
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',
@@ -68,8 +67,32 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
               config,
             });
 
+          const result = await query({
+            ...args,
+            cache: undefined,
+            meta: undefined,
+          });
+
+          if (!args.meta) return result;
           return {
-            result: await query({...args, cache: undefined}),
+            result,
+            meta: {
+              cachedAt: 0,
+              expiresAt: 0,
+              isCached: false,
+              key: '',
+              recache: async () =>
+                ({result, meta: {isCached: false}}) as unknown as {
+                  result: unknown;
+                  meta: {isCached: boolean};
+                },
+              source: 'db',
+              staleUntil: 0,
+              uncache: async () => ({deleted: 0}),
+            },
+          } as unknown as {
+            result: unknown;
+            meta: {isCached: boolean};
           };
         },
       },

@@ -1,43 +1,23 @@
-import {camelCase, kebabCase, snakeCase, startCase} from 'lodash-es';
-
+import {hash} from 'object-code';
 import type {
   CacheAutoKeyParams,
   CacheKeyParams,
   CacheKeyPatternParams,
 } from './types';
-import {hash} from 'object-code';
 
 const globCheckRegex = /[*?]/;
 
 const globCheck = (s: string) => globCheckRegex.test(s);
 
-export enum CacheCase {
-  CAMEL_CASE = 'camelCase',
-  KEBAB_CASE = 'kebabCase',
-  SNAKE_CASE = 'snakeCase',
-  START_CASE = 'startCase',
-}
-
-export const caseMap = {
-  [CacheCase.CAMEL_CASE]: camelCase,
-  [CacheCase.KEBAB_CASE]: kebabCase,
-  [CacheCase.SNAKE_CASE]: snakeCase,
-  [CacheCase.START_CASE]: startCase,
-};
-
 export const getKeyGen =
-  (
-    delimiter = ':',
-    cacheCase: CacheCase = CacheCase.SNAKE_CASE,
-    prefix = 'prisma',
-  ) =>
+  (delimiter = ':', caseTransformer = snakeCase, prefix = 'prisma') =>
   ({params, model, operation: op}: CacheKeyParams) =>
     [...(model ? [{[prefix]: model}] : []), ...(op ? [{op}] : []), ...params]
       .map(obj =>
         Object.entries(obj)
           .map(
             ([key, value]) =>
-              `${caseMap[cacheCase](key)}${delimiter}${caseMap[cacheCase](value)}`,
+              `${caseTransformer(key)}${delimiter}${caseTransformer(value)}`,
           )
           .join(delimiter),
       )
@@ -53,11 +33,7 @@ export const getAutoKeyGen =
     });
 
 export const getKeyPatternGen =
-  (
-    delimiter = ':',
-    cacheCase: CacheCase = CacheCase.CAMEL_CASE,
-    prefix = 'prisma',
-  ) =>
+  (delimiter = ':', caseTransformer = snakeCase, prefix = 'prisma') =>
   ({params, model, operation: op}: CacheKeyPatternParams) =>
     [
       ...(model && prefix ? [{[prefix]: model}] : []),
@@ -69,14 +45,21 @@ export const getKeyPatternGen =
           .map(([key, value]) => {
             if (key.toLowerCase() === 'glob') return value;
 
-            const formattedKey = globCheck(key) ? key : caseMap[cacheCase](key);
+            const formattedKey = globCheck(key) ? key : caseTransformer(key);
 
             const formattedValue = globCheck(value)
               ? value
-              : caseMap[cacheCase](value);
+              : caseTransformer(value);
 
             return `${formattedKey}${delimiter}${formattedValue}`;
           })
           .join(delimiter),
       )
       .join(delimiter);
+
+const snakeCase = (str: string): string =>
+  str
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
+    .replace(/[\s-]+/g, '_')
+    .replace(/[^\w_]/g, '')
+    .toLowerCase();
