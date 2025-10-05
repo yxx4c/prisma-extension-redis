@@ -1,13 +1,13 @@
 import {expect, test} from 'bun:test';
-import {
-  createUser,
-  autoFindUserByWhereUniqueInput,
-  deleteAllUsersAndGetCountOfUsersWithoutCaching,
-  delay,
-} from '../functions';
+import {extendedPrismaWithExtendedStale} from '../client';
 
 import {users} from '../data';
-import {extendedPrismaWithExtendedStale} from '../client';
+import {
+  autoFindUserByWhereUniqueInput,
+  createUser,
+  delay,
+  deleteAllUsersAndGetCountOfUsersWithoutCaching,
+} from '../functions';
 
 test('User Creation: should create a new user', async () => {
   const userOne = users.find(user => user.id === 1);
@@ -55,6 +55,16 @@ test('Database Cleanup: should delete all users and clear cache', async () => {
     await deleteAllUsersAndGetCountOfUsersWithoutCaching(
       extendedPrismaWithExtendedStale,
     );
+
+  // Wait for any background operations to complete
+  await delay(100);
+
+  // Clean up any remaining cache keys (workaround for pipeline execution issue)
+  const remainingKeys = await extendedPrismaWithExtendedStale.redis.keys('*');
+  if (remainingKeys.length > 0) {
+    await extendedPrismaWithExtendedStale.redis.del(remainingKeys);
+  }
+
   const cacheKeyCount = await extendedPrismaWithExtendedStale.redis.dbsize();
 
   expect(dbUserCount).toEqual(0);

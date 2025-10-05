@@ -1,13 +1,13 @@
 import {expect, test} from 'bun:test';
+import {extendedPrismaWithInvalidCacheType} from '../client';
+
+import {users} from '../data';
 import {
-  createUser,
   autoFindUserByWhereUniqueInput,
+  createUser,
   customFindUserByWhereUniqueInput,
   deleteAllUsersAndGetCountOfUsersWithoutCaching,
 } from '../functions';
-
-import {users} from '../data';
-import {extendedPrismaWithInvalidCacheType} from '../client';
 
 test('User Creation: should create a new user', async () => {
   const userOne = users.find(user => user.id === 1);
