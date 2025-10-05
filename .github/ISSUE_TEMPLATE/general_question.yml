@@ -1,0 +1,86 @@
+name: ❓ General Question
+description: Ask a general question about prisma-extension-redis
+title: "[Question]: "
+labels: ["question", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for asking a question! Please provide as much context as possible to help us give you a helpful answer.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know?
+      placeholder: |
+        I'm wondering about...
+        How do I...
+        Is it possible to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide context about your use case or situation
+      placeholder: |
+        I'm working on a project where...
+        I'm trying to implement...
+        I'm migrating from...
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-setup
+    attributes:
+      label: Current Setup (if applicable)
+      description: If relevant, show your current setup
+      placeholder: |
+        ```typescript
+        // Your current code or configuration
+        ```
+      render: typescript
+
+  - type: dropdown
+    id: question-type
+    attributes:
+      label: Question Type
+      description: What type of question is this?
+      options:
+        - How to use a specific feature
+        - Best practices
+        - Compatibility question
+        - Architecture/design question
+        - Troubleshooting
+        - General inquiry
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: documentation-checked
+    attributes:
+      label: Documentation
+      description: Have you checked the documentation?
+      options:
+        - label: I have read the README.md
+        - label: I have checked the GitHub issues
+        - label: I have searched the existing discussions
+        - label: I have tried the examples in the repository
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Additional Context
+        Add any other context about your question here.
