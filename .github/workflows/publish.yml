@@ -38,25 +38,23 @@ jobs:
       - name: Build the package
         run: bun run build
 
+      - name: Prepare npm Packages build
+        run: |
+          mkdir -p dist-npm
+          cp -r dist dist-npm/
+          cp CHANGELOG.md LICENSE README.md package.json dist-npm/
       - name: Prepare GitHub Packages build
         run: |
-          mkdir -p build-github
-          cp -r dist build-github/
-          cp CHANGELOG.md LICENSE README.md build-github/
-          # Create scoped package.json for GitHub Packages
-          sed 's/"name": "prisma-extension-redis"/"name": "@yxx4c\/prisma-extension-redis"/' package.json > build-github/package.json
-          # Remove devDependencies and scripts from GitHub package.json
-          node -e "
-            const pkg = JSON.parse(require('fs').readFileSync('build-github/package.json', 'utf8'));
-            delete pkg.devDependencies;
-            delete pkg.scripts;
-            require('fs').writeFileSync('build-github/package.json', JSON.stringify(pkg, null, 2));
-          "
+          mkdir -p dist-github
+          cp -r dist dist-github/
+          cp CHANGELOG.md LICENSE README.md dist-github/
+          sed 's/"name": "prisma-extension-redis"/"name": "@yxx4c\/prisma-extension-redis"/' package.json > dist-github/package.json
 
       - name: Create Distribution Archive
         run: |
-          zip -r build.zip dist package.json README.md LICENSE CHANGELOG.md
-          tar -czvf build.tar.gz dist package.json README.md LICENSE CHANGELOG.md
+          mkdir -p dist-archive
+          zip -r dist-archive/build.zip dist package.json README.md LICENSE CHANGELOG.md
+          tar -czvf dist-archive/build.tar.gz dist package.json README.md LICENSE CHANGELOG.md
 
       - name: Publish Package
         env:

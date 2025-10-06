@@ -18,16 +18,25 @@ export default {
       },
     ],
     [
-      "@amanda-mitchell/semantic-release-npm-multiple",
+      '@amanda-mitchell/semantic-release-npm-multiple',
       {
-        "registries": {
-          "github": {},
-          "public": {}
-        }
-      }
+        registries: {
+          github: {
+            npmPublish: true,
+            provenance: true,
+            pkgRoot: 'dist-github',
+            tarballDir: 'dist-archive',
+          },
+          public: {
+            npmPublish: true,
+            provenance: true,
+            pkgRoot: 'dist-npm',
+          },
+        },
+      },
     ],
-    "@semantic-release/github",
-    "@semantic-release/git"
+    '@semantic-release/github',
+    '@semantic-release/git',
   ],
   preset: 'angular',
 };
