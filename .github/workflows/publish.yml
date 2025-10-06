@@ -38,6 +38,21 @@ jobs:
       - name: Build the package
         run: bun run build
 
+      - name: Prepare GitHub Packages build
+        run: |
+          mkdir -p build-github
+          cp -r dist build-github/
+          cp CHANGELOG.md LICENSE README.md build-github/
+          # Create scoped package.json for GitHub Packages
+          sed 's/"name": "prisma-extension-redis"/"name": "@yxx4c\/prisma-extension-redis"/' package.json > build-github/package.json
+          # Remove devDependencies and scripts from GitHub package.json
+          node -e "
+            const pkg = JSON.parse(require('fs').readFileSync('build-github/package.json', 'utf8'));
+            delete pkg.devDependencies;
+            delete pkg.scripts;
+            require('fs').writeFileSync('build-github/package.json', JSON.stringify(pkg, null, 2));
+          "
+
       - name: Create Distribution Archive
         run: |
           zip -r build.zip dist package.json README.md LICENSE CHANGELOG.md
