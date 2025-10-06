@@ -18,32 +18,16 @@ export default {
       },
     ],
     [
-      '@semantic-release/github',
+      "@amanda-mitchell/semantic-release-npm-multiple",
       {
-        assets: ['build.zip', 'build.tar.gz', 'CHANGELOG.md'],
-      },
+        "registries": {
+          "github": {},
+          "public": {}
+        }
+      }
     ],
-    [
-      '@amanda-mitchell/semantic-release-npm-multiple',
-      {
-        registries: {
-          github: {
-            npmPublish: true,
-            pkgRoot: 'build-github',
-          },
-          public: {
-            assets: [
-              'dist/**',
-              'package.json',
-              'CHANGELOG.md',
-              'LICENSE',
-              'README.md',
-            ],
-          },
-        },
-      },
-    ],
-    '@semantic-release/git',
+    "@semantic-release/github",
+    "@semantic-release/git"
   ],
   preset: 'angular',
 };
