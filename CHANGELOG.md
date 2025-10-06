@@ -1,3 +1,10 @@
+## [3.3.3](https://github.com/yxx4c/prisma-extension-redis/compare/v3.3.2...v3.3.3) (2025-10-06)
+
+
+### Bug Fixes
+
+* update dual-publish configuration ([ef0f625](https://github.com/yxx4c/prisma-extension-redis/commit/ef0f62517021d33ab5dbdef56df790ddf4e2f32d))
+
 ## [3.3.2](https://github.com/yxx4c/prisma-extension-redis/compare/v3.3.1...v3.3.2) (2025-10-06)
 
 
