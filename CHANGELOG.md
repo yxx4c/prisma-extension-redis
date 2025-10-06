@@ -1,3 +1,10 @@
+# [3.2.0](https://github.com/yxx4c/prisma-extension-redis/compare/v3.1.0...v3.2.0) (2025-10-06)
+
+
+### Features
+
+* enhance caching functionality with meta actions and improved type safety ([25bc57d](https://github.com/yxx4c/prisma-extension-redis/commit/25bc57dcde9469be096f0ddfdeaa48fd1b1c935a))
+
 # [3.1.0](https://github.com/yxx4c/prisma-extension-redis/compare/v3.0.0...v3.1.0) (2024-12-03)
 
 
