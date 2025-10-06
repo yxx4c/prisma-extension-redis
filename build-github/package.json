@@ -1,6 +1,6 @@
 {
-  "name": "prisma-extension-redis",
-  "version": "3.3.2",
+  "name": "@yxx4c/prisma-extension-redis",
+  "version": "3.3.0",
   "description": "Extensive Prisma extension designed for efficient caching and cache invalidation using Redis and Dragonfly Databases",
   "repository": {
     "type": "git",
@@ -61,30 +61,6 @@
     "LICENSE",
     "README.md"
   ],
-  "scripts": {
-    "build": "tsup",
-    "biome": "biome",
-    "dev": "tsup --watch",
-    "test": "bun test",
-    "check": "biome check",
-    "check:write": "biome check --write",
-    "prisma:migrate": "bunx prisma migrate dev --schema ./test/prisma/schema.prisma",
-    "prisma:generate": "bunx prisma generate --schema ./test/prisma/schema.prisma",
-    "pretest": "bun run prisma:migrate && bun run prisma:generate",
-    "posttest": "bun run check",
-    "release": "semantic-release"
-  },
-  "devDependencies": {
-    "@amanda-mitchell/semantic-release-npm-multiple": "^3.16.0",
-    "@biomejs/biome": "^2.2.5",
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/git": "^10.0.1",
-    "@types/bun": "^1.2.23",
-    "@types/node": "^24.6.2",
-    "semantic-release": "^24.2.9",
-    "tsup": "^8.5.0",
-    "typescript": "^5.9.3"
-  },
   "publishConfig": {
     "access": "public"
   },

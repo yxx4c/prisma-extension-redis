@@ -1,17 +1,3 @@
-## [3.3.2](https://github.com/yxx4c/prisma-extension-redis/compare/v3.3.1...v3.3.2) (2025-10-06)
-
-
-### Bug Fixes
-
-* use pkgRoot approach for GitHub Packages scoping ([17a4179](https://github.com/yxx4c/prisma-extension-redis/commit/17a417908abc0234258e47226e60173b057499fb))
-
-## [3.3.1](https://github.com/yxx4c/prisma-extension-redis/compare/v3.3.0...v3.3.1) (2025-10-06)
-
-
-### Bug Fixes
-
-* add scoped package name for GitHub Packages ([042f382](https://github.com/yxx4c/prisma-extension-redis/commit/042f382358d05dd03c49550e6c50561753b90ed8))
-
 # [3.3.0](https://github.com/yxx4c/prisma-extension-redis/compare/v3.2.0...v3.3.0) (2025-10-06)
 
 

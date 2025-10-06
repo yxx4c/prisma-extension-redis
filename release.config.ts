@@ -28,13 +28,8 @@ export default {
       {
         registries: {
           github: {
-            assets: [
-              'dist/**',
-              'package.json',
-              'CHANGELOG.md',
-              'LICENSE',
-              'README.md',
-            ],
+            npmPublish: true,
+            pkgRoot: 'build-github',
           },
           public: {
             assets: [
