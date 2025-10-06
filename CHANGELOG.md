@@ -1,3 +1,10 @@
+# [3.4.0](https://github.com/yxx4c/prisma-extension-redis/compare/v3.3.3...v3.4.0) (2025-10-06)
+
+
+### Features
+
+* test release with runtime build-github generation ([1216484](https://github.com/yxx4c/prisma-extension-redis/commit/121648490bfac67ef7d375c33aed4c12c9bd33bf))
+
 ## [3.3.3](https://github.com/yxx4c/prisma-extension-redis/compare/v3.3.2...v3.3.3) (2025-10-06)
 
 
