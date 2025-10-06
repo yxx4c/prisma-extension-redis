@@ -82,7 +82,7 @@ export const extendedPrismaWithInvalidCacheType = prisma.$extends(
   PrismaExtensionRedis({
     config: {
       ...config,
-      // @ts-ignore: Intnetionally using invalid type for testing
+      // @ts-expect-error: Intentionally using invalid type for testing
       type: 'INVALID',
     },
     client,

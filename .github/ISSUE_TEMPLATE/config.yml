@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/yxx4c/prisma-extension-redis/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: Stack Overflow
+    url: https://stackoverflow.com/questions/tagged/prisma-extension-redis
+    about: Ask technical questions on Stack Overflow with the prisma-extension-redis tag

@@ -1,12 +1,11 @@
-import micromatch from 'micromatch';
+import type {JsArgs, Operation} from '@prisma/client/runtime/library';
 import {coalesceAsync} from 'promise-coalesce';
-
-import type {Operation} from '@prisma/client/runtime/library';
-
+import type {getAutoKeyGen} from './cacheKey';
 import {
-  AUTO_OPERATIONS,
   type ActionCheckParams,
   type ActionParams,
+  AUTO_OPERATIONS,
+  type autoOperations,
   CACHE_OPERATIONS,
   type CacheContext,
   type CacheOptions,
@@ -15,30 +14,50 @@ import {
   type RedisCacheCommands,
   UNCACHE_OPERATIONS,
   type UncacheOptions,
-  type autoOperations,
 } from './types';
-import type {getAutoKeyGen} from './cacheKey';
 
 export const filterOperations =
   <T extends Operation[]>(...ops: T) =>
   (excluded?: Operation[]): T =>
     excluded ? (ops.filter(op => !excluded.includes(op)) as T) : ops;
 
-export const unlinkPatterns = ({patterns, redis}: DeletePatterns) =>
+export const unlinkPatterns = ({
+  patterns,
+  redis,
+  chunkSize = 1000,
+  maxConcurrentBatches = 5,
+}: DeletePatterns) =>
   patterns.map(
     pattern =>
       new Promise<boolean>(resolve => {
-        const stream = redis.scanStream({
-          match: pattern,
-        });
+        const stream = redis.scanStream({match: pattern});
+        const buffer: string[] = [];
+        const activeBatches: Promise<
+          [error: Error | null, result: unknown][] | null
+        >[] = [];
+
+        const execBatch = (keys: string[]) => {
+          activeBatches.push(
+            redis
+              .pipeline()
+              .unlink(...keys)
+              .exec(),
+          );
+          return activeBatches.length >= maxConcurrentBatches
+            ? activeBatches.shift()
+            : Promise.resolve();
+        };
+
         stream.on('data', (keys: string[]) => {
-          if (keys.length) {
-            const pipeline = redis.pipeline();
-            pipeline.unlink(keys);
-            pipeline.exec();
-          }
+          buffer.push(...keys);
+          while (buffer.length >= chunkSize)
+            execBatch(buffer.splice(0, chunkSize));
         });
-        stream.on('end', () => resolve(true));
+
+        stream.on('end', () => {
+          if (buffer.length) execBatch(buffer.splice(0, buffer.length));
+          Promise.all(activeBatches).then(() => resolve(true));
+        });
       }),
   );
 
@@ -48,9 +67,9 @@ const commands: RedisCacheCommands = {
 
     set: (redis, key, value, ttl) => {
       const multi = redis.multi().call('JSON.SET', key, '$', value);
-      if (ttl && ttl !== Number.POSITIVE_INFINITY) {
+      if (ttl && ttl !== Number.POSITIVE_INFINITY)
         multi.call('EXPIRE', key, ttl);
-      }
+
       return multi.exec();
     },
   },
@@ -59,9 +78,9 @@ const commands: RedisCacheCommands = {
 
     set: (redis, key, value, ttl) => {
       const multi = redis.multi().call('SET', key, value);
-      if (ttl && ttl !== Number.POSITIVE_INFINITY) {
+      if (ttl && ttl !== Number.POSITIVE_INFINITY)
         multi.call('EXPIRE', key, ttl);
-      }
+
       return multi.exec();
     },
   },
@@ -75,7 +94,7 @@ export const getCache = async ({
   redis,
   args: xArgs,
   query,
-}: GetDataParams) => {
+}: GetDataParams): Promise<unknown> => {
   const {onError, onHit, onMiss, transformer, type} = config;
 
   if (!commands[type])
@@ -93,9 +112,9 @@ export const getCache = async ({
 
   const args = {
     ...xArgs,
+    cache: undefined,
+    meta: undefined,
   };
-
-  args.cache = undefined;
 
   if (cached) {
     if (onHit) onHit(key);
@@ -111,7 +130,31 @@ export const getCache = async ({
       ttl: cacheTtl,
     } = cacheContext;
 
-    if (timestamp < cacheTime + cacheTtl) return {result, isCached};
+    if (timestamp < cacheTime + cacheTtl)
+      return {
+        result,
+        meta: {
+          cachedAt: cacheTime,
+          expiresAt: cacheTime + cacheTtl,
+          isCached,
+          key,
+          recache: () =>
+            getCache({
+              ttl,
+              stale,
+              config,
+              key,
+              redis,
+              args,
+              query,
+            }) as unknown as Promise<
+              ReturnType<typeof promiseCoalesceGetCache>
+            >,
+          source: 'cache',
+          staleUntil: cacheTime + cacheStale,
+          uncache: () => redis.del(key).then(deleted => ({deleted})),
+        },
+      } as unknown as ReturnType<typeof promiseCoalesceGetCache>;
 
     if (timestamp <= cacheTime + cacheStale)
       query(args).then(result => {
@@ -131,7 +174,31 @@ export const getCache = async ({
         );
       });
 
-    return {result, isCached};
+    return {
+      result,
+      meta: {
+        isCached,
+        key,
+        source: 'stale-cache',
+        expiresAt: cacheTime + cacheTtl,
+        staleUntil: cacheTime + cacheStale,
+        cachedAt: cacheTime,
+        recache: async () =>
+          (await getCache({
+            ttl,
+            stale,
+            config,
+            key,
+            redis,
+            args,
+            query,
+          })) as unknown as ReturnType<typeof promiseCoalesceGetCache>,
+        uncache: async () => {
+          const deleted = await redis.del(key);
+          return {deleted};
+        },
+      },
+    } as unknown as ReturnType<typeof promiseCoalesceGetCache>;
   }
 
   if (!cached && onMiss) onMiss(key);
@@ -146,10 +213,37 @@ export const getCache = async ({
     ttl + stale,
   );
 
-  return {result, isCached: false};
+  return {
+    result,
+    meta: {
+      isCached: false,
+      key,
+      source: 'db',
+      expiresAt: timestamp + ttl,
+      staleUntil: timestamp + stale,
+      cachedAt: timestamp,
+      recache: async () =>
+        (await getCache({
+          ttl,
+          stale,
+          config,
+          key,
+          redis,
+          args,
+          query,
+        })) as unknown as ReturnType<typeof promiseCoalesceGetCache>,
+      uncache: async () => {
+        const deleted = await redis.del(key);
+        return {deleted};
+      },
+    },
+  } as unknown as ReturnType<typeof promiseCoalesceGetCache>;
 };
 
-export const promiseCoalesceGetCache = ({key, ...rest}: GetDataParams) =>
+export const promiseCoalesceGetCache = ({
+  key,
+  ...rest
+}: GetDataParams): Promise<unknown> =>
   coalesceAsync(key, async () => getCache({key, ...rest}));
 
 export const autoCacheAction = async (
@@ -176,7 +270,7 @@ export const autoCacheAction = async (
 
   const key = getAutoKey({args, model, operation: operation as Operation});
 
-  return await promiseCoalesceGetCache({
+  const wrapped = await promiseCoalesceGetCache({
     ttl,
     stale,
     config,
@@ -185,6 +279,10 @@ export const autoCacheAction = async (
     args,
     query,
   });
+
+  const argsWithMeta = args as JsArgs & {meta?: boolean};
+  const effectiveMeta = argsWithMeta.meta ?? false;
+  return effectiveMeta ? wrapped : (wrapped as {result: unknown}).result;
 };
 
 export const customCacheAction = async ({
@@ -201,7 +299,7 @@ export const customCacheAction = async ({
   const ttl = customTtl ?? config.ttl;
   const stale = customStale ?? config.stale;
 
-  return await promiseCoalesceGetCache({
+  const wrapped = await promiseCoalesceGetCache({
     ttl,
     stale,
     config,
@@ -210,6 +308,10 @@ export const customCacheAction = async ({
     args,
     query,
   });
+
+  const argsWithMeta = args as JsArgs & {meta?: boolean};
+  const effectiveMeta = argsWithMeta.meta ?? false;
+  return effectiveMeta ? wrapped : (wrapped as {result: unknown}).result;
 };
 
 export const customUncacheAction = async ({
@@ -220,21 +322,24 @@ export const customUncacheAction = async ({
   const {uncacheKeys, hasPattern} = args.uncache as unknown as UncacheOptions;
 
   if (hasPattern) {
-    const patternKeys = micromatch(uncacheKeys, ['*\\**', '*\\?*']);
-    const plainKeys = micromatch(uncacheKeys, ['*', '!*\\**', '!*\\?*']);
+    // Check if any key contains wildcard characters (* or ?)
+    const hasWildcards = uncacheKeys.some(
+      key => key.includes('*') || key.includes('?'),
+    );
 
-    const unlinkPromises = [
-      ...unlinkPatterns({
+    if (hasWildcards) {
+      // Use Redis SCAN with MATCH for pattern-based deletion
+      const unlinkPromises = unlinkPatterns({
         redis,
-        patterns: patternKeys,
-      }),
-      ...(plainKeys.length ? [redis.unlink(plainKeys)] : []),
-    ];
+        patterns: uncacheKeys,
+        chunkSize: config.chunkSize,
+      });
+      await Promise.all(unlinkPromises);
+    } else await redis.del(uncacheKeys);
+  } else await redis.del(uncacheKeys);
 
-    await Promise.all(unlinkPromises);
-  } else await redis.unlink(uncacheKeys);
-
-  return {result: await query({...args, uncache: undefined})};
+  // Uncache operations should always return the plain Prisma result
+  return await query({...args, uncache: undefined, meta: undefined});
 };
 
 export const isAutoCacheEnabled = ({

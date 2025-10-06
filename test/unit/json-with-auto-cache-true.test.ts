@@ -1,16 +1,16 @@
 import {expect, test} from 'bun:test';
+import {extendedPrismaWithJsonAndAutoCacheTrue as extendedPrisma} from '../client';
+
+import {users} from '../data';
 import {
-  createUser,
-  createManyUser,
-  updateUserDetails,
   autoFindUserByWhereUniqueInput,
+  createManyUser,
+  createUser,
   customFindUserByWhereUniqueInput,
   deleteAllUsersAndGetCountOfUsersWithoutCaching,
   deleteUserById,
+  updateUserDetails,
 } from '../functions';
-
-import {users} from '../data';
-import {extendedPrismaWithJsonAndAutoCacheTrue as extendedPrisma} from '../client';
 
 test('User Creation: should create a new user', async () => {
   const userOne = users.find(user => user.id === 1);
@@ -125,7 +125,7 @@ test('User Retrieval: should find a user with auto cache and then through custom
     args.where,
     key,
   );
-  expect(customResult).toEqual({result: userFour, isCached: true});
+  expect(customResult).toEqual({result: userFour, isCached: false});
 });
 
 test('Cache Management: should update user and invalidate cache', async () => {

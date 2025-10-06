@@ -1,4 +1,6 @@
-export type {RedisOptions} from 'iovalkey';
+export type {Redis, RedisOptions} from 'iovalkey';
+export {getKeyGen, getKeyPatternGen} from './cacheKey';
+export {filterOperations, unlinkPatterns} from './cacheUncache';
 export {PrismaExtensionRedis} from './prismaExtensionRedis';
 export type {
   AutoCacheConfig,
@@ -6,5 +8,3 @@ export type {
   CacheOptions,
   UncacheOptions,
 } from './types';
-export {filterOperations, unlinkPatterns} from './cacheUncache';
-export {CacheCase} from './cacheKey';

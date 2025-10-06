@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: test utility functions need flexible typing */
 import type {Prisma} from '@prisma/client';
 
 interface User {
@@ -6,64 +7,75 @@ interface User {
   email: string;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: <To use different type of client config>
 type PrismaClient = any;
 
 export const createUser = async (extendedPrisma: PrismaClient, user: User) =>
-  await extendedPrisma.user.create({
-    data: user,
-    uncache: {
-      uncacheKeys: ['*'],
-      hasPattern: true,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
+  await extendedPrisma.user
+    .create({
+      data: user,
+      uncache: {
+        uncacheKeys: ['*'],
+        hasPattern: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    })
+    .then((result: unknown) => ({result}));
 
 export const createManyUser = async (
   extendedPrisma: PrismaClient,
   users: User[],
 ) =>
-  await extendedPrisma.user.createManyAndReturn({
-    data: users,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
+  await extendedPrisma.user
+    .createManyAndReturn({
+      data: users,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    })
+    .then((result: unknown) => ({result}));
 
 export const updateUserDetails = async (
   extendedPrisma: PrismaClient,
   user: User,
   uncache?: {uncacheKeys: string[]; hasPattern?: boolean},
 ) =>
-  await extendedPrisma.user.update({
-    where: {id: user.id},
-    data: user,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-    uncache,
-  });
+  await extendedPrisma.user
+    .update({
+      where: {id: user.id},
+      data: user,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+      uncache,
+    })
+    .then((result: unknown) => ({result}));
 
 export const autoFindUserByWhereUniqueInput = async (
   extendedPrisma: PrismaClient,
   where: Prisma.UserWhereUniqueInput,
 ) =>
-  await extendedPrisma.user.findUnique({
-    where,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
+  await extendedPrisma.user
+    .findUnique({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+      meta: true,
+    })
+    .then((r: {result: unknown; meta: {isCached: boolean}}) => ({
+      result: r.result,
+      isCached: r.meta.isCached,
+    }));
 
 export const customFindUserByWhereUniqueInput = async (
   extendedPrisma: PrismaClient,
@@ -71,18 +83,24 @@ export const customFindUserByWhereUniqueInput = async (
   key: string,
   infinite = false,
 ) =>
-  await extendedPrisma.user.findUnique({
-    where,
-    cache: {
-      key,
-      ...(infinite ? {ttl: Number.POSITIVE_INFINITY} : {}),
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
+  await extendedPrisma.user
+    .findUnique({
+      where,
+      cache: {
+        key,
+        ...(infinite ? {ttl: Number.POSITIVE_INFINITY} : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+      meta: true,
+    })
+    .then((r: {result: unknown; meta: {isCached: boolean}}) => ({
+      result: r.result,
+      isCached: r.meta.isCached,
+    }));
 
 export const deleteUserById = async (
   extendedPrisma: PrismaClient,
@@ -111,9 +129,11 @@ export const deleteAllUsers = async (extendedPrisma: PrismaClient) =>
 export const getCountOfUsersWithoutCaching = async (
   extendedPrisma: PrismaClient,
 ) =>
-  await extendedPrisma.user.count({
-    cache: false,
-  });
+  await extendedPrisma.user
+    .count({
+      cache: false,
+    })
+    .then((result: unknown) => ({result}));
 
 export const deleteAllUsersAndGetCountOfUsersWithoutCaching = (
   extendedPrisma: PrismaClient,

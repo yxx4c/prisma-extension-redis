@@ -1,12 +1,9 @@
 import {PrismaClient} from '@prisma/client';
-import pino from 'pino';
 import {
   type AutoCacheConfig,
-  CacheCase,
   type CacheConfig,
   PrismaExtensionRedis,
 } from 'prisma-extension-redis';
-import {SuperJSON} from 'superjson';
 
 import {users} from './data';
 import env from './env';
@@ -17,9 +14,6 @@ const client = {
   host: env.REDIS_HOST_NAME, // Specify Redis host name
   port: env.REDIS_PORT, // Specify Redis port
 };
-
-// Create a pino logger instance for logging
-const logger = pino();
 
 const auto: AutoCacheConfig = {
   excludedModels: ['Post'], // Models to exclude from auto-caching default behavior
@@ -39,7 +33,7 @@ const config: CacheConfig = {
   ttl: 60, // Default Time-to-live for caching in seconds
   stale: 30, // Default Stale time after ttl in seconds
   auto,
-  logger, // Logger for cache events
+  chunkSize: 500, // Chunk size for batch operations (e.g., pattern-based key deletion)
   // transformer: {
   //   // Use, main serialize and deserialize function for additional functionality if required
   //   deserialize: data => SuperJSON.parse(data), // default value of deserialize function
@@ -91,38 +85,24 @@ const main = async () => {
   await extendedPrisma.user
     .findUnique({
       where: {email: userOne.email},
+      meta: true,
     })
-    .then(({result: user, isCached}) =>
-      console.info(`AUTO: ${resultSourceString(isCached)}: Find userOne`, {
+    .then(({result: user, meta}) =>
+      console.info(`AUTO: ${resultSourceString(meta.isCached)}: Find userOne`, {
         user,
-        isCached,
+        meta,
       }),
     );
 
   await extendedPrisma.user
     .findUnique({
       where: {email: userOne.email},
+      meta: true,
     })
-    .then(({result: user, isCached}) =>
-      console.info(`AUTO: ${resultSourceString(isCached)}: Find userOne`, {
+    .then(({result: user, meta}) =>
+      console.info(`AUTO: ${resultSourceString(meta.isCached)}: Find userOne`, {
         user,
-        isCached,
-      }),
-    );
-
-  await extendedPrisma.user
-    .findUnique({
-      where: {email: userOne.email},
-      cache: {
-        key: extendedPrisma.getKey({
-          params: [{prisma: 'User'}, {email: userOne.email}],
-        }),
-      },
-    })
-    .then(({result: user, isCached}) =>
-      console.info(`CUSTOM: ${resultSourceString(isCached)}: Find userOne`, {
-        user,
-        isCached,
+        meta,
       }),
     );
 
@@ -134,17 +114,41 @@ const main = async () => {
           params: [{prisma: 'User'}, {email: userOne.email}],
         }),
       },
+      meta: true,
     })
-    .then(({result: user, isCached}) =>
-      console.info(`CUSTOM: ${resultSourceString(isCached)}: Find userOne`, {
-        // transforming date type value retrieved from cache to confirm that the date is parsed correctly
-        // user: {
-        //   ...user,
-        //   createdAt: user?.createdAt.toLocaleDateString(),
-        // },
-        user,
-        isCached,
-      }),
+    .then(({result: user, meta}) =>
+      console.info(
+        `CUSTOM: ${resultSourceString(meta.isCached)}: Find userOne`,
+        {
+          user,
+          meta,
+        },
+      ),
+    );
+
+  await extendedPrisma.user
+    .findUnique({
+      where: {email: userOne.email},
+      cache: {
+        key: extendedPrisma.getKey({
+          params: [{prisma: 'User'}, {email: userOne.email}],
+        }),
+      },
+      meta: true,
+    })
+    .then(({result: user, meta}) =>
+      console.info(
+        `CUSTOM: ${resultSourceString(meta.isCached)}: Find userOne`,
+        {
+          // transforming date type value retrieved from cache to confirm that the date is parsed correctly
+          // user: {
+          //   ...user,
+          //   createdAt: user?.createdAt.toLocaleDateString(),
+          // },
+          user,
+          meta,
+        },
+      ),
     );
 
   await extendedPrisma.user
@@ -158,7 +162,7 @@ const main = async () => {
         ],
       },
     })
-    .then(({result: deleted}) =>
+    .then(deleted =>
       console.info({type: 'UNCACHE: DATABASE: Deleted userOne', deleted}),
     );
 
@@ -177,7 +181,7 @@ const main = async () => {
         ],
       },
     })
-    .then(({result: updated}) =>
+    .then(updated =>
       console.info({type: 'UNCACHE: DATABASE: Update userTwo', updated}),
     );
 
@@ -190,12 +194,16 @@ const main = async () => {
         }),
         ttl: 60,
       },
+      meta: true,
     })
-    .then(({result: user, isCached}) =>
-      console.info(`CUSTOM: ${resultSourceString(isCached)}: Find userTwo`, {
-        user,
-        isCached,
-      }),
+    .then(({result: user, meta}) =>
+      console.info(
+        `CUSTOM: ${resultSourceString(meta.isCached)}: Find userTwo`,
+        {
+          user,
+          meta,
+        },
+      ),
     );
 
   await extendedPrisma.user
@@ -207,29 +215,37 @@ const main = async () => {
         }),
         ttl: 60,
       },
+      meta: true,
     })
-    .then(({result: user, isCached}) =>
-      console.info(`CUSTOM: ${resultSourceString(isCached)}: Find userTwo`, {
-        // transforming date type value retrieved from cache to confirm that the date is parsed correctly
-        // user: {
-        //   ...user,
-        //   createdAt: user?.createdAt.toLocaleDateString(),
-        // },
-        user,
-        isCached,
-      }),
+    .then(({result: user, meta}) =>
+      console.info(
+        `CUSTOM: ${resultSourceString(meta.isCached)}: Find userTwo`,
+        {
+          // transforming date type value retrieved from cache to confirm that the date is parsed correctly
+          // user: {
+          //   ...user,
+          //   createdAt: user?.createdAt.toLocaleDateString(),
+          // },
+          user,
+          meta,
+        },
+      ),
     );
 
   setTimeout(async () => {
     await extendedPrisma.user
       .findUnique({
         where: {email: userOne.email},
+        meta: true,
       })
-      .then(({result: user, isCached}) =>
-        console.info(`AUTO: ${resultSourceString(isCached)}: Find userOne`, {
-          user,
-          isCached,
-        }),
+      .then(({result: user, meta}) =>
+        console.info(
+          `AUTO: ${resultSourceString(meta.isCached)}: Find userOne`,
+          {
+            user,
+            meta,
+          },
+        ),
       );
 
     const args = {where: {email: userOne.email}};
@@ -247,13 +263,14 @@ const main = async () => {
             operation: 'findUnique',
           }),
         },
+        meta: true,
       })
-      .then(({result: user, isCached}) =>
+      .then(({result: user, meta}) =>
         console.info(
-          `CUSTOM: ${resultSourceString(isCached)}: WITH AUTO KEY: Find userOne`,
+          `CUSTOM: ${resultSourceString(meta.isCached)}: WITH AUTO KEY: Find userOne`,
           {
             user,
-            isCached,
+            meta,
           },
         ),
       );

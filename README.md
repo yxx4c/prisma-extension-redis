@@ -48,12 +48,11 @@ bun add prisma-extension-redis
 
 ### Step 1: Initialize Required Clients
 
-Before setting up caching, initialize your Prisma client, Redis client config, and logger:
+Before setting up caching, initialize your Prisma client and Redis client config:
 
 ```javascript
 import pino from 'pino';
 import { PrismaClient } from '@prisma/client';
-import { Redis } from 'iovalkey';
 import {SuperJSON} from 'superjson';
 
 import {
@@ -72,9 +71,6 @@ const client = {
   host: process.env.REDIS_HOST_NAME, // Redis host
   port: process.env.REDIS_PORT,      // Redis port
 };
-
-// Create a logger using pino (optional)
-const logger = pino();
 ```
 
 ### Step 2: Configure Auto-Cache Settings
@@ -115,7 +111,6 @@ const config: CacheConfig = {
  ttl: 60, // Default Time-to-live for caching in seconds
   stale: 30, // Default Stale time after ttl in seconds
   auto, // Auto-caching options (configured above)
-  logger, // Logger for cache events (configured above)
   transformer: {
     // Custom serialize and deserialize function for additional functionality if required
     deserialize: data => SuperJSON.parse(data),
@@ -123,7 +118,7 @@ const config: CacheConfig = {
   },
   type: 'JSON', // Redis cache type, whether you prefer the data to be stored as JSON or STRING in Redis
   cacheKey: { // Inbuilt cache key configuration
-    case: CacheCase.SNAKE_CASE, // Select a cache case conversion option for generated keys from CacheCase
+    // caseTransformer?: Function to transform cache key (default: snake_case)
     delimiter: '*', // Delimiter for keys (default value: ':')
     prefix: 'awesomeness', // Cache key prefix (default value: 'prisma')
   },
@@ -257,9 +252,7 @@ extendedPrisma.user.update({
 ## Dependencies
 
 - `iovalkey` package is used for Redis connectivity.
-- `micromatch` is used for patter matching for keys.
 - `object-code` is used for generating unique hash in auto-caching keys.
-- `lodash-es` is used for CacheCase logic in key management.
 
 ---
 

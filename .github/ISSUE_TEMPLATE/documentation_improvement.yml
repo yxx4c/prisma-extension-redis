@@ -1,0 +1,146 @@
+name: 📚 Documentation Improvement
+description: Suggest improvements to documentation, examples, or guides
+title: "[Docs]: "
+labels: ["documentation", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting documentation improvements! Help us make the documentation clearer and more helpful for all users.
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      description: What type of documentation needs improvement?
+      options:
+        - README.md
+        - Code examples
+        - API documentation
+        - Configuration guide
+        - Troubleshooting guide
+        - Migration guide
+        - TypeScript types
+        - Error messages
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-documentation
+    attributes:
+      label: Current Documentation
+      description: What does the current documentation say? (copy the relevant section)
+      placeholder: |
+        Current documentation states:
+        "..."
+
+  - type: textarea
+    id: issue-description
+    attributes:
+      label: Issue with Current Documentation
+      description: What's unclear, incorrect, or missing in the current documentation?
+      placeholder: |
+        The current documentation is unclear because...
+        It's missing information about...
+        The example doesn't work because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested-improvement
+    attributes:
+      label: Suggested Improvement
+      description: How would you like the documentation to be improved?
+      placeholder: |
+        I suggest the documentation should:
+        - Explain X more clearly
+        - Include an example of Y
+        - Add a note about Z
+        - Fix the typo in...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-content
+    attributes:
+      label: Proposed Content
+      description: If you have specific content suggestions, please provide them here
+      placeholder: |
+        ```markdown
+        ## Suggested new section
+        
+        Your proposed content here...
+        ```
+      render: markdown
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: What use case or scenario would this documentation improvement help with?
+      placeholder: |
+        This would help users who are trying to...
+        This is particularly important when...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this documentation improvement?
+      options:
+        - Low - Nice to have
+        - Medium - Would improve clarity
+        - High - Currently confusing or misleading
+        - Critical - Documentation is incorrect and causes issues
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-sections
+    attributes:
+      label: Affected Sections
+      description: Which specific sections or files would need to be updated?
+      placeholder: |
+        - README.md (Installation section)
+        - README.md (Usage examples)
+        - src/types.ts (JSDoc comments)
+        - Example code in README
+
+  - type: textarea
+    id: additional-resources
+    attributes:
+      label: Additional Resources
+      description: Are there any external resources or examples that could be referenced?
+      placeholder: |
+        - Link to Prisma documentation about...
+        - Example from another project that does this well
+        - Stack Overflow answer that explains this concept
+
+  - type: checkboxes
+    id: documentation-checked
+    attributes:
+      label: Documentation Review
+      description: Have you checked the current documentation?
+      options:
+        - label: I have read the current README.md
+        - label: I have checked the code examples
+        - label: I have reviewed the TypeScript types
+        - label: I have looked at the GitHub issues for similar questions
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Additional Context
+        Add any other context about the documentation improvement here.
