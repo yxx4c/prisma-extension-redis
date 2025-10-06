@@ -261,3 +261,4 @@ extendedPrisma.user.update({
 `prisma-extension-redis` offers an efficient and powerful way to manage caching in Prisma-based applications. By leveraging both automatic and custom caching, you can optimize your application's performance while maintaining data consistency.
 
 Upgrade to `prisma-extension-redis` for an optimized caching strategy and contribute to its growth by starring the repository if you find it useful!
+# Test release trigger
