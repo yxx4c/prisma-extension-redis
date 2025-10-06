@@ -28,16 +28,8 @@ export default {
       {
         registries: {
           github: {
-            assets: [
-              'dist/**',
-              'package.json',
-              'CHANGELOG.md',
-              'LICENSE',
-              'README.md',
-            ],
-            pkgJsonOverrides: {
-              name: '@yxx4c/prisma-extension-redis',
-            },
+            npmPublish: true,
+            pkgRoot: 'build-github',
           },
           public: {
             assets: [
