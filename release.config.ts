@@ -35,6 +35,9 @@ export default {
               'LICENSE',
               'README.md',
             ],
+            pkgJsonOverrides: {
+              name: '@yxx4c/prisma-extension-redis',
+            },
           },
           public: {
             assets: [
