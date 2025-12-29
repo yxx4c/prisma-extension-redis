@@ -9,6 +9,34 @@ const globCheckRegex = /[*?]/;
 
 const globCheck = (s: string) => globCheckRegex.test(s);
 
+/**
+ * Recursively sorts object keys to ensure consistent hashing
+ * regardless of key insertion order.
+ */
+const sortObjectKeys = (obj: unknown): unknown => {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(sortObjectKeys);
+  }
+
+  if (obj instanceof Date) {
+    return obj;
+  }
+
+  return Object.keys(obj as Record<string, unknown>)
+    .sort()
+    .reduce(
+      (sorted, key) => {
+        sorted[key] = sortObjectKeys((obj as Record<string, unknown>)[key]);
+        return sorted;
+      },
+      {} as Record<string, unknown>,
+    );
+};
+
 export const getKeyGen =
   (delimiter = ':', caseTransformer = snakeCase, prefix = 'prisma') =>
   ({params, model, operation: op}: CacheKeyParams) =>
@@ -25,12 +53,15 @@ export const getKeyGen =
 
 export const getAutoKeyGen =
   (getKey: (input: CacheKeyParams) => string) =>
-  ({args, model, operation}: CacheAutoKeyParams) =>
-    getKey({
-      params: [{key: hash({...args, cache: undefined}).toString()}],
+  ({args, model, operation}: CacheAutoKeyParams) => {
+    // Normalize args to ensure consistent hashing regardless of key order
+    const normalizedArgs = sortObjectKeys({...args, cache: undefined});
+    return getKey({
+      params: [{key: hash(normalizedArgs).toString()}],
       model,
       operation,
     });
+  };
 
 export const getKeyPatternGen =
   (delimiter = ':', caseTransformer = snakeCase, prefix = 'prisma') =>

@@ -116,7 +116,8 @@ export const getCache = async ({
   args: xArgs,
   query,
 }: GetDataParams): Promise<InternalCacheResult> => {
-  const {onError, onHit, onMiss, transformer, type} = config;
+  const {metricsCollector, onError, onHit, onMiss, transformer, type} = config;
+  const startTime = Date.now();
 
   if (!commands[type])
     throw new Error(
@@ -133,6 +134,7 @@ export const getCache = async ({
   // Track cache read errors
   if (error) {
     errors.cacheRead = toError(error);
+    if (metricsCollector) metricsCollector.recordError();
     if (onError) onError(error);
   }
 
@@ -177,6 +179,7 @@ export const getCache = async ({
 
     // Fresh cache - return immediately
     if (timestamp < cacheTime + cacheTtl) {
+      if (metricsCollector) metricsCollector.recordHit(Date.now() - startTime);
       return {
         result,
         meta: {
@@ -202,6 +205,7 @@ export const getCache = async ({
       // This prevents duplicate DB queries when multiple concurrent requests
       // hit stale cache simultaneously
       if (!backgroundRefreshes.has(refreshKey)) {
+        if (metricsCollector) metricsCollector.recordBackgroundRefresh();
         const refreshPromise = query(args)
           .then(async refreshResult => {
             const newCacheContext: CacheContext = {
@@ -222,6 +226,7 @@ export const getCache = async ({
             // Track background refresh error (note: this won't be in current response
             // since it's async, but it will be reported via onError)
             errors.backgroundRefresh = toError(refreshError);
+            if (metricsCollector) metricsCollector.recordError();
             if (onError) onError(refreshError);
           })
           .finally(() => {
@@ -231,22 +236,24 @@ export const getCache = async ({
 
         backgroundRefreshes.set(refreshKey, refreshPromise);
       }
-    }
 
-    return {
-      result,
-      meta: {
-        isCached,
-        key,
-        source: 'stale-cache',
-        expiresAt: cacheTime + cacheTtl,
-        staleUntil: cacheTime + cacheStale,
-        cachedAt: cacheTime,
-        recache: createRecache(),
-        uncache: createUncache(),
-        errors: getErrorsMeta(),
-      },
-    };
+      if (metricsCollector)
+        metricsCollector.recordStaleHit(Date.now() - startTime);
+      return {
+        result,
+        meta: {
+          isCached,
+          key,
+          source: 'stale-cache',
+          expiresAt: cacheTime + cacheTtl,
+          staleUntil: cacheTime + cacheStale,
+          cachedAt: cacheTime,
+          recache: createRecache(),
+          uncache: createUncache(),
+          errors: getErrorsMeta(),
+        },
+      };
+    }
   }
 
   // Cache miss - query database and cache result
@@ -272,9 +279,11 @@ export const getCache = async ({
     );
   } catch (writeError) {
     errors.cacheWrite = toError(writeError);
+    if (metricsCollector) metricsCollector.recordError();
     if (onError) onError(writeError);
   }
 
+  if (metricsCollector) metricsCollector.recordMiss(Date.now() - startTime);
   return {
     result,
     meta: {

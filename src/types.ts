@@ -7,6 +7,7 @@ import type {
   Operation,
 } from '@prisma/client/runtime/library';
 import type {Redis, RedisOptions} from 'iovalkey';
+import type {MetricsCollector} from './metrics';
 
 export const ALL_OPERATIONS = [
   '$executeRaw',
@@ -435,6 +436,12 @@ export type CacheConfig = {
   onError?: (error: unknown) => void;
   onHit?: (key: string) => void;
   onMiss?: (key: string) => void;
+
+  /**
+   * Metrics collector for tracking cache performance.
+   * Use createMetricsCollector() to create one.
+   */
+  metricsCollector?: MetricsCollector;
 };
 
 export interface ModelConfig {

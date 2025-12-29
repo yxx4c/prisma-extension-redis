@@ -9,6 +9,9 @@ import {
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
 } from './cacheUncache';
+import type {WarmOptions, WarmQuery} from './cacheWarmer';
+import {createCacheWarmer} from './cacheWarmer';
+import {checkHealth} from './healthCheck';
 import type {CleanupOptions, FlushModelOptions} from './maintenance';
 import {
   cleanupOrphanedKeys,
@@ -87,6 +90,40 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
           delimiter: configuredDelimiter,
           ...opts,
         }),
+
+      /**
+       * Check Redis connection health.
+       */
+      healthCheck: () => checkHealth(redis),
+
+      /**
+       * Warm the cache with predefined queries.
+       * Note: This returns a function that must be called with the extended prisma client.
+       */
+      createCacheWarmer: (prisma: unknown) =>
+        createCacheWarmer(
+          prisma,
+          {ttl: config.ttl, stale: config.stale},
+          getAutoKey,
+        ),
+
+      /**
+       * Warm the cache with predefined queries using this client.
+       * @param queries - Array of queries to warm
+       * @param options - Warming options (concurrency, callbacks)
+       */
+      warmCache: function (
+        this: {$parent: unknown},
+        queries: WarmQuery[],
+        opts?: WarmOptions,
+      ) {
+        const warmer = createCacheWarmer(
+          this.$parent,
+          {ttl: config.ttl, stale: config.stale},
+          getAutoKey,
+        );
+        return warmer(queries, opts);
+      },
     },
     model: {
       $allModels: {} as ExtendedModel,
