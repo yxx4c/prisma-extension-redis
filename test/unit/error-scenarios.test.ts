@@ -5,6 +5,7 @@ import {
   checkHealth,
   cleanupOrphanedKeys,
   createMetricsCollector,
+  filterOperations,
   flushModelCache,
   getCache,
   PrismaExtensionRedis,
@@ -255,22 +256,21 @@ describe('Error Scenarios', () => {
   });
 
   describe('toError Helper', () => {
-    test('should convert non-Error to Error', async () => {
+    test('should convert string error to Error instance', async () => {
       const key = 'test:toError:string';
 
-      // Create a scenario where a non-Error is thrown
-      // This happens when Redis returns an error as a string in the exec result
+      // Return a string error (not an Error instance) to trigger toError conversion
       const mockRedis = {
         multi: () => ({
           call: () => mockRedis.multi(),
-          exec: async () => [[new Error('Redis error'), null]],
+          exec: async () => [['Redis string error', null]], // String, not Error
         }),
         del: async () => 1,
       };
 
       const onError = mock(() => {});
 
-      await getCache({
+      const result = await getCache({
         ttl: 60,
         stale: 30,
         config: {
@@ -286,6 +286,70 @@ describe('Error Scenarios', () => {
       });
 
       expect(onError).toHaveBeenCalled();
+      // The string error should be converted to Error and tracked
+      expect(result.meta.errors?.cacheRead).toBeInstanceOf(Error);
+      expect(result.meta.errors?.cacheRead?.message).toBe('Redis string error');
+    });
+
+    test('should convert number error to Error instance', async () => {
+      const key = 'test:toError:number';
+
+      // Return a number error to trigger toError conversion
+      const mockRedis = {
+        multi: () => ({
+          call: () => mockRedis.multi(),
+          exec: async () => [[42, null]], // Number, not Error
+        }),
+        del: async () => 1,
+      };
+
+      const result = await getCache({
+        ttl: 60,
+        stale: 30,
+        config: {
+          ttl: 60,
+          stale: 30,
+          type: 'JSON',
+        },
+        key,
+        redis: mockRedis as unknown as typeof redis,
+        args: {},
+        query: async () => ({id: 1}),
+      });
+
+      expect(result.meta.errors?.cacheRead).toBeInstanceOf(Error);
+      expect(result.meta.errors?.cacheRead?.message).toBe('42');
+    });
+
+    test('should convert object error to Error instance', async () => {
+      const key = 'test:toError:object';
+
+      // Return an object error (not Error instance) to trigger toError conversion
+      const mockRedis = {
+        multi: () => ({
+          call: () => mockRedis.multi(),
+          exec: async () => [[{code: 'ERR', msg: 'failed'}, null]], // Plain object
+        }),
+        del: async () => 1,
+      };
+
+      const result = await getCache({
+        ttl: 60,
+        stale: 30,
+        config: {
+          ttl: 60,
+          stale: 30,
+          type: 'JSON',
+        },
+        key,
+        redis: mockRedis as unknown as typeof redis,
+        args: {},
+        query: async () => ({id: 1}),
+      });
+
+      expect(result.meta.errors?.cacheRead).toBeInstanceOf(Error);
+      // Object.toString() gives [object Object]
+      expect(result.meta.errors?.cacheRead?.message).toBe('[object Object]');
     });
   });
 });
@@ -640,6 +704,27 @@ describe('Write Error After Deserialization Failure', () => {
     // Should have recorded errors (deserialization + serialization)
     expect(metricsCollector.getMetrics().errors).toBeGreaterThanOrEqual(2);
     expect(onError).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('filterOperations Edge Cases', () => {
+  test('should return all operations when excluded is undefined', () => {
+    const ops = ['findUnique', 'findFirst', 'findMany'] as const;
+    const filter = filterOperations(...ops);
+
+    // Call with undefined to trigger the falsy branch
+    const result = filter(undefined);
+
+    expect(result).toEqual(ops);
+  });
+
+  test('should filter operations when excluded is provided', () => {
+    const ops = ['findUnique', 'findFirst', 'findMany'] as const;
+    const filter = filterOperations(...ops);
+
+    const result = filter(['findFirst']);
+
+    expect(result).toEqual(['findUnique', 'findMany']);
   });
 });
 
