@@ -1,6 +1,11 @@
 export type {Redis, RedisOptions} from 'iovalkey';
 export {getKeyGen, getKeyPatternGen} from './cacheKey';
-export {filterOperations, unlinkPatterns} from './cacheUncache';
+export {
+  filterOperations,
+  getCache,
+  promiseCoalesceGetCache,
+  unlinkPatterns,
+} from './cacheUncache';
 export type {WarmOptions, WarmQuery, WarmResult} from './cacheWarmer';
 export {createCacheWarmer} from './cacheWarmer';
 export type {

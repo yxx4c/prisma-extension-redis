@@ -240,6 +240,30 @@ describe('Cache Key Generation', () => {
       expect(key).toBeDefined();
       expect(typeof key).toBe('string');
     });
+
+    test('should handle Date values correctly', () => {
+      const getKey = getKeyGen();
+      const getAutoKey = getAutoKeyGen(getKey);
+
+      const date = new Date('2024-01-01');
+      const key = getAutoKey({
+        model: 'User',
+        operation: 'findMany',
+        args: {where: {createdAt: date}},
+      });
+
+      expect(key).toBeDefined();
+      expect(typeof key).toBe('string');
+
+      // Same date should produce same key
+      const key2 = getAutoKey({
+        model: 'User',
+        operation: 'findMany',
+        args: {where: {createdAt: new Date('2024-01-01')}},
+      });
+
+      expect(key).toBe(key2);
+    });
   });
 
   describe('getKeyPatternGen', () => {
@@ -272,6 +296,28 @@ describe('Cache Key Generation', () => {
       });
 
       expect(pattern).toContain('?');
+    });
+
+    test('should preserve glob characters in key names', () => {
+      const getKeyPattern = getKeyPatternGen();
+      const pattern = getKeyPattern({
+        model: 'User',
+        params: [{'*': 'value'}],
+      });
+
+      // Key with glob should not be case-transformed
+      expect(pattern).toContain('*:value');
+    });
+
+    test('should preserve glob characters in both key and value', () => {
+      const getKeyPattern = getKeyPatternGen();
+      const pattern = getKeyPattern({
+        model: 'User',
+        params: [{'field*': 'value?'}],
+      });
+
+      expect(pattern).toContain('field*');
+      expect(pattern).toContain('value?');
     });
   });
 });
