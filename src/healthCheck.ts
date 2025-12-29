@@ -1,10 +1,8 @@
 import type {Redis} from 'iovalkey';
-
-/** Health check timeout in milliseconds */
-const HEALTH_CHECK_TIMEOUT_MS = 5000;
-
-/** Latency threshold for degraded status (ms) */
-const DEGRADED_LATENCY_THRESHOLD_MS = 1000;
+import {
+  DEGRADED_LATENCY_THRESHOLD_MS,
+  HEALTH_CHECK_TIMEOUT_MS,
+} from './constants';
 
 /**
  * Health check status

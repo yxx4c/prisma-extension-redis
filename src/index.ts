@@ -3,6 +3,28 @@ export {getKeyGen, getKeyPatternGen} from './cacheKey';
 export {filterOperations, unlinkPatterns} from './cacheUncache';
 export type {WarmOptions, WarmQuery, WarmResult} from './cacheWarmer';
 export {createCacheWarmer} from './cacheWarmer';
+export type {
+  CacheSourceType,
+  CacheTypeValue,
+  DebugLevelType,
+} from './constants';
+export {
+  CACHE_SOURCE,
+  CACHE_TYPES,
+  DEBUG_LEVELS,
+  DEFAULT_CHUNK_SIZE,
+  DEFAULT_DELIMITER,
+  DEFAULT_MAX_CONCURRENT_BATCHES,
+  DEFAULT_PREFIX,
+  DEFAULT_SCAN_COUNT,
+  DEFAULT_STALE,
+  DEFAULT_WARM_CONCURRENCY,
+  DEGRADED_LATENCY_THRESHOLD_MS,
+  ESTIMATED_VALUE_SIZE_BYTES,
+  HEALTH_CHECK_TIMEOUT_MS,
+} from './constants';
+export type {DebugLevel, DebugLogger} from './debug';
+export {createDebugLogger, noopLogger} from './debug';
 export type {HealthResult, HealthStatus} from './healthCheck';
 export {checkHealth} from './healthCheck';
 export type {

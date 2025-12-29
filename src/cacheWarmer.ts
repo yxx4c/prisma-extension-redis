@@ -1,4 +1,5 @@
 import type {Operation} from '@prisma/client/runtime/library';
+import {DEFAULT_WARM_CONCURRENCY} from './constants';
 
 /**
  * Query definition for cache warming
@@ -81,7 +82,7 @@ export const createCacheWarmer = (
     options: WarmOptions = {},
   ): Promise<WarmResult> => {
     const {
-      concurrency = 5,
+      concurrency = DEFAULT_WARM_CONCURRENCY,
       onProgress,
       onQueryError,
       continueOnError = true,

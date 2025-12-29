@@ -11,6 +11,7 @@ import {
 } from './cacheUncache';
 import type {WarmOptions, WarmQuery} from './cacheWarmer';
 import {createCacheWarmer} from './cacheWarmer';
+import {DEFAULT_DELIMITER, DEFAULT_PREFIX} from './constants';
 import {checkHealth} from './healthCheck';
 import type {CleanupOptions, FlushModelOptions} from './maintenance';
 import {
@@ -44,8 +45,8 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   const getKeyPattern = getKeyPatternGen(delimiter, caseTransformer, prefix);
 
   // Bind maintenance utilities with configured prefix/delimiter
-  const configuredPrefix = prefix ?? 'prisma';
-  const configuredDelimiter = delimiter ?? ':';
+  const configuredPrefix = prefix ?? DEFAULT_PREFIX;
+  const configuredDelimiter = delimiter ?? DEFAULT_DELIMITER;
 
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',

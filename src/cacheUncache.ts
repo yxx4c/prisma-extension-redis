@@ -1,6 +1,7 @@
 import type {JsArgs, Operation} from '@prisma/client/runtime/library';
 import {coalesceAsync} from 'promise-coalesce';
 import type {getAutoKeyGen} from './cacheKey';
+import {DEFAULT_CHUNK_SIZE, DEFAULT_MAX_CONCURRENT_BATCHES} from './constants';
 import {
   type ActionCheckParams,
   type ActionParams,
@@ -30,11 +31,18 @@ export const filterOperations =
   (excluded?: Operation[]): T =>
     excluded ? (ops.filter(op => !excluded.includes(op)) as T) : ops;
 
+/**
+ * Deletes Redis keys matching the given patterns using SCAN and UNLINK.
+ * Uses batching to handle large numbers of keys efficiently.
+ *
+ * @param params - The deletion parameters
+ * @returns Array of promises that resolve when deletion is complete
+ */
 export const unlinkPatterns = ({
   patterns,
   redis,
-  chunkSize = 1000,
-  maxConcurrentBatches = 5,
+  chunkSize = DEFAULT_CHUNK_SIZE,
+  maxConcurrentBatches = DEFAULT_MAX_CONCURRENT_BATCHES,
 }: DeletePatterns) =>
   patterns.map(
     pattern =>

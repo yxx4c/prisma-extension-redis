@@ -7,6 +7,7 @@ import type {
   Operation,
 } from '@prisma/client/runtime/library';
 import type {Redis, RedisOptions} from 'iovalkey';
+import type {DebugLevelType} from './constants';
 import type {MetricsCollector} from './metrics';
 
 export const ALL_OPERATIONS = [
@@ -442,6 +443,16 @@ export type CacheConfig = {
    * Use createMetricsCollector() to create one.
    */
   metricsCollector?: MetricsCollector;
+
+  /**
+   * Debug logging level for troubleshooting cache operations.
+   * - 'off': No logging (default)
+   * - 'error': Only errors
+   * - 'warn': Errors and warnings
+   * - 'info': Errors, warnings, and info messages
+   * - 'debug': All messages including debug details
+   */
+  debug?: DebugLevelType;
 };
 
 export interface ModelConfig {

@@ -1,4 +1,11 @@
 import type {Redis} from 'iovalkey';
+import {
+  DEFAULT_CHUNK_SIZE,
+  DEFAULT_DELIMITER,
+  DEFAULT_PREFIX,
+  DEFAULT_SCAN_COUNT,
+  ESTIMATED_VALUE_SIZE_BYTES,
+} from './constants';
 
 /**
  * Options for the orphaned key cleanup operation.
@@ -62,11 +69,11 @@ export interface CleanupResult {
  */
 export const cleanupOrphanedKeys = async ({
   redis,
-  prefix = 'prisma',
+  prefix = DEFAULT_PREFIX,
   validModels,
-  delimiter = ':',
+  delimiter = DEFAULT_DELIMITER,
   dryRun = false,
-  batchSize = 1000,
+  batchSize = DEFAULT_CHUNK_SIZE,
   onProgress,
 }: CleanupOptions): Promise<CleanupResult> => {
   const startTime = Date.now();
@@ -160,8 +167,8 @@ export interface CacheStats {
  */
 export const getCacheStats = async (
   redis: Redis,
-  prefix = 'prisma',
-  delimiter = ':',
+  prefix = DEFAULT_PREFIX,
+  delimiter = DEFAULT_DELIMITER,
 ): Promise<CacheStats> => {
   const pattern = `${prefix}${delimiter}*`;
   const keysByModel: Record<string, number> = {};
@@ -169,7 +176,10 @@ export const getCacheStats = async (
   let estimatedSizeBytes = 0;
 
   return new Promise((resolve, reject) => {
-    const stream = redis.scanStream({match: pattern, count: 1000});
+    const stream = redis.scanStream({
+      match: pattern,
+      count: DEFAULT_SCAN_COUNT,
+    });
 
     stream.on('data', (keys: string[]) => {
       totalKeys += keys.length;
@@ -179,8 +189,8 @@ export const getCacheStats = async (
         const model = parts[1] || 'unknown';
         keysByModel[model] = (keysByModel[model] || 0) + 1;
 
-        // Rough estimate: key length + average value size (500 bytes)
-        estimatedSizeBytes += key.length + 500;
+        // Rough estimate: key length + average value size
+        estimatedSizeBytes += key.length + ESTIMATED_VALUE_SIZE_BYTES;
       }
     });
 
@@ -225,9 +235,9 @@ export interface FlushModelOptions {
 export const flushModelCache = async ({
   redis,
   model,
-  prefix = 'prisma',
-  delimiter = ':',
-  batchSize = 1000,
+  prefix = DEFAULT_PREFIX,
+  delimiter = DEFAULT_DELIMITER,
+  batchSize = DEFAULT_CHUNK_SIZE,
 }: FlushModelOptions): Promise<{deletedCount: number; durationMs: number}> => {
   const startTime = Date.now();
   const pattern = `${prefix}${delimiter}${model.toLowerCase()}${delimiter}*`;
