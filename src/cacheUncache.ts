@@ -8,6 +8,7 @@ import {
   type autoOperations,
   CACHE_OPERATIONS,
   type CacheContext,
+  type CacheErrors,
   type CacheOptions,
   type DeletePatterns,
   type GetDataParams,
@@ -16,6 +17,7 @@ import {
   UNCACHE_OPERATIONS,
   type UncacheOptions,
 } from './types';
+import {validateCacheOptions} from './validation';
 
 /**
  * Tracks in-flight background refresh operations to prevent duplicate
@@ -94,6 +96,12 @@ const commands: RedisCacheCommands = {
 };
 
 /**
+ * Converts an unknown error to an Error instance.
+ */
+const toError = (err: unknown): Error =>
+  err instanceof Error ? err : new Error(String(err));
+
+/**
  * Retrieves data from cache or database with stale-while-revalidate support.
  *
  * @param params - The cache retrieval parameters
@@ -117,9 +125,16 @@ export const getCache = async ({
 
   const command = commands[type];
 
+  // Track errors during cache operations
+  const errors: CacheErrors = {};
+
   const [[error, cached]] = (await command.get(redis, key)) ?? [];
 
-  if (onError && error) onError(error);
+  // Track cache read errors
+  if (error) {
+    errors.cacheRead = toError(error);
+    if (onError) onError(error);
+  }
 
   const timestamp = Date.now() / 1000;
 
@@ -141,6 +156,10 @@ export const getCache = async ({
       return {deleted};
     };
   };
+
+  // Helper to include errors in meta only if there are any
+  const getErrorsMeta = (): CacheErrors | undefined =>
+    Object.keys(errors).length > 0 ? errors : undefined;
 
   if (cached) {
     if (onHit) onHit(key);
@@ -169,6 +188,7 @@ export const getCache = async ({
           source: 'cache',
           staleUntil: cacheTime + cacheStale,
           uncache: createUncache(),
+          errors: getErrorsMeta(),
         },
       };
     }
@@ -199,7 +219,9 @@ export const getCache = async ({
             );
           })
           .catch(refreshError => {
-            // Ensure errors in background refresh are reported via onError callback
+            // Track background refresh error (note: this won't be in current response
+            // since it's async, but it will be reported via onError)
+            errors.backgroundRefresh = toError(refreshError);
             if (onError) onError(refreshError);
           })
           .finally(() => {
@@ -222,6 +244,7 @@ export const getCache = async ({
         cachedAt: cacheTime,
         recache: createRecache(),
         uncache: createUncache(),
+        errors: getErrorsMeta(),
       },
     };
   }
@@ -238,12 +261,19 @@ export const getCache = async ({
     timestamp,
     ttl,
   };
-  command.set(
-    redis,
-    key,
-    (transformer?.serialize || JSON.stringify)(newCacheContext),
-    ttl + stale,
-  );
+
+  // Track cache write errors
+  try {
+    await command.set(
+      redis,
+      key,
+      (transformer?.serialize || JSON.stringify)(newCacheContext),
+      ttl + stale,
+    );
+  } catch (writeError) {
+    errors.cacheWrite = toError(writeError);
+    if (onError) onError(writeError);
+  }
 
   return {
     result,
@@ -256,6 +286,7 @@ export const getCache = async ({
       cachedAt: timestamp,
       recache: createRecache(),
       uncache: createUncache(),
+      errors: getErrorsMeta(),
     },
   };
 };
@@ -320,11 +351,12 @@ export const customCacheAction = async ({
   options: {args, query},
   config,
 }: ActionParams): Promise<unknown | InternalCacheResult> => {
-  const {
-    key,
-    ttl: customTtl,
-    stale: customStale,
-  } = args.cache as unknown as CacheOptions;
+  const cacheOptions = args.cache as unknown as CacheOptions;
+
+  // Validate cache options before proceeding
+  validateCacheOptions(cacheOptions);
+
+  const {key, ttl: customTtl, stale: customStale} = cacheOptions;
 
   const ttl = customTtl ?? config.ttl;
   const stale = customStale ?? config.stale;

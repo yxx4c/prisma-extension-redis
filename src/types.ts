@@ -178,8 +178,22 @@ type PrismaMetaArg = {
 export type CacheSource = 'cache' | 'stale-cache' | 'db';
 
 /**
+ * Error information captured during cache operations.
+ * Errors are tracked but don't prevent operation - cache gracefully
+ * degrades to database queries on failure.
+ */
+export type CacheErrors = {
+  /** Error during cache read operation */
+  cacheRead?: Error;
+  /** Error during cache write operation */
+  cacheWrite?: Error;
+  /** Error during background refresh (stale-while-revalidate) */
+  backgroundRefresh?: Error;
+};
+
+/**
  * Metadata returned with cached query results.
- * Contains information about cache state,timing, and control functions.
+ * Contains information about cache state, timing, and control functions.
  */
 export type Meta<T, A, O extends Operation> = {
   cachedAt: number;
@@ -190,6 +204,8 @@ export type Meta<T, A, O extends Operation> = {
   source: CacheSource;
   staleUntil: number;
   uncache: () => Promise<{deleted: number}>;
+  /** Errors encountered during cache operations (if any) */
+  errors?: CacheErrors;
 };
 
 /**
@@ -217,6 +233,8 @@ export type InternalCacheResult = {
     source: CacheSource;
     staleUntil: number;
     uncache: () => Promise<{deleted: number}>;
+    /** Errors encountered during cache operations (if any) */
+    errors?: CacheErrors;
   };
 };
 

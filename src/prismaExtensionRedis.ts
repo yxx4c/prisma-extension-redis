@@ -9,12 +9,18 @@ import {
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
 } from './cacheUncache';
-
+import type {CleanupOptions, FlushModelOptions} from './maintenance';
+import {
+  cleanupOrphanedKeys,
+  flushModelCache,
+  getCacheStats,
+} from './maintenance';
 import type {
   ExtendedModel,
   NonCachedMetaResult,
   PrismaExtensionRedisOptions,
 } from './types';
+import {validateConfig} from './validation';
 
 export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   const {
@@ -22,6 +28,9 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
     config: {auto, cacheKey},
     client: redisOptions,
   } = options;
+
+  // Validate configuration at initialization
+  validateConfig(config);
 
   const {delimiter, caseTransformer, prefix} = cacheKey ?? {};
 
@@ -31,6 +40,10 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   const getAutoKey = getAutoKeyGen(getKey);
   const getKeyPattern = getKeyPatternGen(delimiter, caseTransformer, prefix);
 
+  // Bind maintenance utilities with configured prefix/delimiter
+  const configuredPrefix = prefix ?? 'prisma';
+  const configuredDelimiter = delimiter ?? ':';
+
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',
     client: {
@@ -38,6 +51,42 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
       getKey,
       getKeyPattern,
       getAutoKey,
+
+      /**
+       * Get cache statistics for monitoring.
+       */
+      getCacheStats: () =>
+        getCacheStats(redis, configuredPrefix, configuredDelimiter),
+
+      /**
+       * Clean up cache keys for models that no longer exist in the schema.
+       */
+      cleanupOrphanedKeys: (
+        validModels: string[],
+        opts?: Partial<Omit<CleanupOptions, 'redis' | 'validModels'>>,
+      ) =>
+        cleanupOrphanedKeys({
+          redis,
+          validModels,
+          prefix: configuredPrefix,
+          delimiter: configuredDelimiter,
+          ...opts,
+        }),
+
+      /**
+       * Flush all cache entries for a specific model.
+       */
+      flushModelCache: (
+        model: string,
+        opts?: Partial<Omit<FlushModelOptions, 'redis' | 'model'>>,
+      ) =>
+        flushModelCache({
+          redis,
+          model,
+          prefix: configuredPrefix,
+          delimiter: configuredDelimiter,
+          ...opts,
+        }),
     },
     model: {
       $allModels: {} as ExtendedModel,

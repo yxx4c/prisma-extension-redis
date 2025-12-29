@@ -78,13 +78,19 @@ export const extendedPrismaWithExtendedStale = prisma.$extends(
   }),
 );
 
-export const extendedPrismaWithInvalidCacheType = prisma.$extends(
-  PrismaExtensionRedis({
-    config: {
-      ...config,
-      // @ts-expect-error: Intentionally using invalid type for testing
-      type: 'INVALID',
-    },
-    client,
-  }),
-);
+/**
+ * Factory function to create a Prisma client with an invalid cache type.
+ * This is a function (not a constant) because the validation now throws
+ * at initialization time, so we need to defer creation to test time.
+ */
+export const createPrismaWithInvalidCacheType = () =>
+  prisma.$extends(
+    PrismaExtensionRedis({
+      config: {
+        ...config,
+        // @ts-expect-error: Intentionally using invalid type for testing
+        type: 'INVALID',
+      },
+      client,
+    }),
+  );
