@@ -241,7 +241,202 @@ extendedPrisma.user.update({
 - **Selective Caching**: Customize which queries to cache, how long to cache them, and whether to cache them at all.
 - **Efficient Invalidation**: Keep cached data up-to-date by selectively invalidating caches when updates or deletions occur.
 - **Granular Control**: Easily toggle caching on or off for individual queries as needed.
-- **Logger Support**: Integrate logging to monitor cache hits, misses, and invalidations for easier debugging and optimization.
+- **Metrics & Monitoring**: Built-in metrics collection and event callbacks for observability.
+- **Health Checks**: Monitor Redis connection health with latency tracking.
+- **Cache Maintenance**: Utilities for cache statistics, model flushing, and orphaned key cleanup.
+
+---
+
+## Meta Information
+
+Get detailed cache information by passing `meta: true` to any cached query:
+
+```typescript
+const { result, meta } = await prisma.user.findUnique({
+  where: { id: 1 },
+  cache: { key: 'user:1', ttl: 60 },
+  meta: true,
+});
+
+console.log(meta);
+// {
+//   source: 'cache',        // 'cache' | 'stale-cache' | 'db'
+//   isCached: true,
+//   key: 'user:1',
+//   cachedAt: 1703847600,   // Unix timestamp (seconds)
+//   expiresAt: 1703847660,  // Unix timestamp (seconds)
+//   staleUntil: 1703847690, // Unix timestamp (seconds)
+//   recache: [Function],    // Force refresh the cache
+//   uncache: [Function],    // Delete from cache
+//   errors: undefined,      // Any cache operation errors
+// }
+
+// Force refresh the cache
+const refreshed = await meta.recache();
+
+// Delete from cache
+const { deleted } = await meta.uncache();
+```
+
+---
+
+## Monitoring & Observability
+
+### Event Callbacks
+
+Monitor cache operations with event callbacks:
+
+```typescript
+const prisma = new PrismaClient().$extends(
+  PrismaExtensionRedis({
+    config: {
+      ttl: 300,
+      stale: 60,
+      auto: true,
+      type: 'JSON',
+      onHit: (key) => {
+        console.log('Cache hit:', key);
+      },
+      onMiss: (key) => {
+        console.log('Cache miss:', key);
+      },
+      onError: (error) => {
+        console.error('Cache error:', error);
+      },
+    },
+    client: redisOptions,
+  })
+);
+```
+
+### Metrics Collection
+
+Track cache performance with the built-in metrics collector:
+
+```typescript
+import { createMetricsCollector, PrismaExtensionRedis } from 'prisma-extension-redis';
+
+const metrics = createMetricsCollector();
+
+const prisma = new PrismaClient().$extends(
+  PrismaExtensionRedis({
+    config: {
+      ttl: 60,
+      stale: 30,
+      auto: true,
+      type: 'JSON',
+      metricsCollector: metrics,
+    },
+    client: redisOptions,
+  })
+);
+
+// Get metrics anytime
+const stats = metrics.getMetrics();
+console.log(`Hit ratio: ${(stats.hitRatio * 100).toFixed(1)}%`);
+console.log(`Cache hits: ${stats.hits}, Misses: ${stats.misses}`);
+console.log(`Avg cache latency: ${stats.avgCacheLatencyMs.toFixed(2)}ms`);
+console.log(`Avg DB latency: ${stats.avgDbLatencyMs.toFixed(2)}ms`);
+
+// Reset metrics
+metrics.reset();
+```
+
+### Health Check
+
+Monitor Redis connection health:
+
+```typescript
+const health = await prisma.healthCheck();
+
+console.log(health);
+// {
+//   status: 'healthy',      // 'healthy' | 'degraded' | 'unhealthy'
+//   latencyMs: 2,
+//   connected: true,
+//   timestamp: Date,
+//   serverInfo: { version: '7.0.0', mode: 'standalone' }
+// }
+
+if (health.status === 'unhealthy') {
+  console.error('Redis unavailable:', health.error);
+}
+```
+
+---
+
+## Cache Maintenance
+
+### Cache Statistics
+
+Get statistics about cached data:
+
+```typescript
+const stats = await prisma.getCacheStats();
+
+console.log(`Total keys: ${stats.totalKeys}`);
+console.log('Keys by model:', stats.keysByModel);
+// { user: 150, post: 320, comment: 45 }
+console.log(`Estimated size: ${stats.estimatedSizeBytes} bytes`);
+```
+
+### Flush Model Cache
+
+Invalidate all cache entries for a specific model:
+
+```typescript
+// After bulk updates to users
+const result = await prisma.flushModelCache('User');
+console.log(`Deleted ${result.deletedCount} cache entries in ${result.durationMs}ms`);
+```
+
+### Cleanup Orphaned Keys
+
+Remove cache keys for models that no longer exist in your schema:
+
+```typescript
+// Get valid models from your Prisma schema
+const validModels = ['User', 'Post', 'Comment'];
+
+// Dry run first to preview what would be deleted
+const preview = await prisma.cleanupOrphanedKeys(validModels, { dryRun: true });
+console.log(`Found ${preview.orphanedKeys.length} orphaned keys`);
+
+// Actually delete orphaned keys
+const result = await prisma.cleanupOrphanedKeys(validModels, { dryRun: false });
+console.log(`Deleted ${result.deletedCount} orphaned keys`);
+```
+
+---
+
+## Configuration Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `ttl` | `number` | Required | Time-to-live in seconds |
+| `stale` | `number` | `0` | Additional stale window after TTL |
+| `type` | `'JSON' \| 'STRING'` | Required | Redis storage format |
+| `auto` | `boolean \| AutoCacheConfig` | `false` | Enable auto-caching |
+| `transformer` | `{ serialize, deserialize }` | JSON methods | Custom serialization |
+| `onHit` | `(key: string) => void` | - | Cache hit callback |
+| `onMiss` | `(key: string) => void` | - | Cache miss callback |
+| `onError` | `(error: unknown) => void` | - | Error callback |
+| `metricsCollector` | `MetricsCollector` | - | Metrics tracking instance |
+| `chunkSize` | `number` | `1000` | Batch size for pattern deletion |
+| `maxConcurrentBatches` | `number` | `5` | Concurrent deletion batches |
+| `cacheKey.prefix` | `string` | `'prisma'` | Cache key prefix |
+| `cacheKey.delimiter` | `string` | `':'` | Cache key delimiter |
+| `cacheKey.caseTransformer` | `(s: string) => string` | `snakeCase` | Key transformation function |
+
+### AutoCacheConfig Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `excludedModels` | `string[]` | `[]` | Models to exclude from auto-caching |
+| `excludedOperations` | `Operation[]` | `[]` | Operations to exclude globally |
+| `models` | `ModelConfig[]` | `[]` | Model-specific configurations |
+| `ttl` | `number` | Config TTL | Default TTL for auto-cached queries |
+| `stale` | `number` | Config stale | Default stale time for auto-cached queries |
 
 ---
 
