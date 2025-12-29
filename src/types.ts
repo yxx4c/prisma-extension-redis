@@ -177,7 +177,11 @@ type PrismaMetaArg = {
 
 export type CacheSource = 'cache' | 'stale-cache' | 'db';
 
-type Meta<T, A, O extends Operation> = {
+/**
+ * Metadata returned with cached query results.
+ * Contains information about cache state,timing, and control functions.
+ */
+export type Meta<T, A, O extends Operation> = {
   cachedAt: number;
   expiresAt: number;
   isCached: boolean;
@@ -188,12 +192,50 @@ type Meta<T, A, O extends Operation> = {
   uncache: () => Promise<{deleted: number}>;
 };
 
-type ResultWithMeta<T, A, O extends Operation> = {
+/**
+ * Result type when meta: true is passed to a cached query.
+ */
+export type ResultWithMeta<T, A, O extends Operation> = {
   result: Prisma.Result<T, A, O>;
   meta: Meta<T, A, O>;
 };
 
 type ResultPlain<T, A, O extends Operation> = Prisma.Result<T, A, O>;
+
+/**
+ * Internal cache result structure returned by getCache.
+ * This type is used internally and should not be exported to users.
+ */
+export type InternalCacheResult = {
+  result: unknown;
+  meta: {
+    cachedAt: number;
+    expiresAt: number;
+    isCached: boolean;
+    key: string;
+    recache: () => Promise<InternalCacheResult>;
+    source: CacheSource;
+    staleUntil: number;
+    uncache: () => Promise<{deleted: number}>;
+  };
+};
+
+/**
+ * Non-cached result structure when meta: true is passed but caching is disabled.
+ */
+export type NonCachedMetaResult = {
+  result: unknown;
+  meta: {
+    cachedAt: 0;
+    expiresAt: 0;
+    isCached: false;
+    key: '';
+    recache: () => Promise<NonCachedMetaResult>;
+    source: 'db';
+    staleUntil: 0;
+    uncache: () => Promise<{deleted: 0}>;
+  };
+};
 
 interface AutoRequiredArgsFunction<O extends Operation> {
   <T, A>(

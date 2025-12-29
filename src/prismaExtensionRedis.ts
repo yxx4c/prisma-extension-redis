@@ -10,7 +10,11 @@ import {
   isCustomUncacheEnabled,
 } from './cacheUncache';
 
-import type {ExtendedModel, PrismaExtensionRedisOptions} from './types';
+import type {
+  ExtendedModel,
+  NonCachedMetaResult,
+  PrismaExtensionRedisOptions,
+} from './types';
 
 export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   const {
@@ -73,27 +77,24 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
             meta: undefined,
           });
 
+          // If meta is not requested, return plain result
           if (!args.meta) return result;
-          return {
+
+          // Return non-cached result with meta structure
+          const nonCachedResult: NonCachedMetaResult = {
             result,
             meta: {
               cachedAt: 0,
               expiresAt: 0,
               isCached: false,
               key: '',
-              recache: async () =>
-                ({result, meta: {isCached: false}}) as unknown as {
-                  result: unknown;
-                  meta: {isCached: boolean};
-                },
+              recache: async () => nonCachedResult,
               source: 'db',
               staleUntil: 0,
               uncache: async () => ({deleted: 0}),
             },
-          } as unknown as {
-            result: unknown;
-            meta: {isCached: boolean};
           };
+          return nonCachedResult;
         },
       },
     },
