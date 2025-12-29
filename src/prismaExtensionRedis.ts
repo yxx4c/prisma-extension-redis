@@ -114,12 +114,12 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
        * @param options - Warming options (concurrency, callbacks)
        */
       warmCache: function (
-        this: {$parent: unknown},
+        this: unknown,
         queries: WarmQuery[],
         opts?: WarmOptions,
       ) {
         const warmer = createCacheWarmer(
-          this.$parent,
+          this,
           {ttl: config.ttl, stale: config.stale},
           getAutoKey,
         );

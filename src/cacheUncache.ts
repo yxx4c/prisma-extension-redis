@@ -2,6 +2,7 @@ import type {JsArgs, Operation} from '@prisma/client/runtime/library';
 import {coalesceAsync} from 'promise-coalesce';
 import type {getAutoKeyGen} from './cacheKey';
 import {DEFAULT_CHUNK_SIZE, DEFAULT_MAX_CONCURRENT_BATCHES} from './constants';
+import {createDebugLogger, noopLogger} from './debug';
 import {
   type ActionCheckParams,
   type ActionParams,
@@ -124,8 +125,12 @@ export const getCache = async ({
   args: xArgs,
   query,
 }: GetDataParams): Promise<InternalCacheResult> => {
-  const {metricsCollector, onError, onHit, onMiss, transformer, type} = config;
+  const {debug, metricsCollector, onError, onHit, onMiss, transformer, type} =
+    config;
+  const logger = debug ? createDebugLogger(debug) : noopLogger;
   const startTime = Date.now();
+
+  logger.debug(`Cache lookup started`, {key, ttl, stale});
 
   if (!commands[type])
     throw new Error(
@@ -142,6 +147,7 @@ export const getCache = async ({
   // Track cache read errors
   if (error) {
     errors.cacheRead = toError(error);
+    logger.error(`Cache read error`, {key, error});
     if (metricsCollector) metricsCollector.recordError();
     if (onError) onError(error);
   }
@@ -172,10 +178,64 @@ export const getCache = async ({
     Object.keys(errors).length > 0 ? errors : undefined;
 
   if (cached) {
+    // Attempt to deserialize cached data
+    let cacheContext: CacheContext;
+    try {
+      cacheContext = (transformer?.deserialize || JSON.parse)(cached as string);
+    } catch (parseError) {
+      // Deserialization failed - treat as cache miss
+      errors.cacheRead = toError(parseError);
+      logger.error(`Cache deserialization failed, treating as miss`, {
+        key,
+        error: parseError,
+      });
+      if (metricsCollector) metricsCollector.recordError();
+      if (onError) onError(parseError);
+      // Fall through to cache miss logic below by setting cached to null equivalent
+      // We need to continue to the cache miss section
+      if (onMiss) onMiss(key);
+
+      const result = await query(args);
+
+      const newCacheContext: CacheContext = {
+        isCached: true,
+        result,
+        stale,
+        timestamp,
+        ttl,
+      };
+
+      try {
+        await command.set(
+          redis,
+          key,
+          (transformer?.serialize || JSON.stringify)(newCacheContext),
+          ttl + stale,
+        );
+      } catch (writeError) {
+        errors.cacheWrite = toError(writeError);
+        if (metricsCollector) metricsCollector.recordError();
+        if (onError) onError(writeError);
+      }
+
+      if (metricsCollector) metricsCollector.recordMiss(Date.now() - startTime);
+      return {
+        result,
+        meta: {
+          isCached: false,
+          key,
+          source: 'db',
+          expiresAt: timestamp + ttl,
+          staleUntil: timestamp + stale,
+          cachedAt: timestamp,
+          recache: createRecache(),
+          uncache: createUncache(),
+          errors: getErrorsMeta(),
+        },
+      };
+    }
+
     if (onHit) onHit(key);
-    const cacheContext: CacheContext = (transformer?.deserialize || JSON.parse)(
-      cached as string,
-    );
 
     const {
       isCached,
@@ -187,6 +247,11 @@ export const getCache = async ({
 
     // Fresh cache - return immediately
     if (timestamp < cacheTime + cacheTtl) {
+      logger.debug(`Cache hit (fresh)`, {
+        key,
+        age: Math.round(timestamp - cacheTime),
+        ttl: cacheTtl,
+      });
       if (metricsCollector) metricsCollector.recordHit(Date.now() - startTime);
       return {
         result,
@@ -206,6 +271,12 @@ export const getCache = async ({
 
     // Stale cache - return stale data and trigger background refresh
     if (timestamp <= cacheTime + cacheStale) {
+      logger.debug(`Cache hit (stale), triggering background refresh`, {
+        key,
+        age: Math.round(timestamp - cacheTime),
+        ttl: cacheTtl,
+        staleWindow: cacheStale,
+      });
       // Use a unique key to track this specific background refresh
       const refreshKey = `refresh:${key}`;
 
@@ -234,6 +305,10 @@ export const getCache = async ({
             // Track background refresh error (note: this won't be in current response
             // since it's async, but it will be reported via onError)
             errors.backgroundRefresh = toError(refreshError);
+            logger.error(`Background refresh failed`, {
+              key,
+              error: refreshError,
+            });
             if (metricsCollector) metricsCollector.recordError();
             if (onError) onError(refreshError);
           })
@@ -265,6 +340,7 @@ export const getCache = async ({
   }
 
   // Cache miss - query database and cache result
+  logger.debug(`Cache miss, querying database`, {key});
   if (onMiss) onMiss(key);
 
   const result = await query(args);
@@ -287,10 +363,12 @@ export const getCache = async ({
     );
   } catch (writeError) {
     errors.cacheWrite = toError(writeError);
+    logger.error(`Cache write error`, {key, error: writeError});
     if (metricsCollector) metricsCollector.recordError();
     if (onError) onError(writeError);
   }
 
+  logger.debug(`Cache populated`, {key, ttl, stale});
   if (metricsCollector) metricsCollector.recordMiss(Date.now() - startTime);
   return {
     result,

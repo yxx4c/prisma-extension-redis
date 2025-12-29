@@ -1,5 +1,6 @@
-import type {Operation} from '@prisma/client/runtime/library';
+import type {JsArgs, Operation} from '@prisma/client/runtime/library';
 import {DEFAULT_WARM_CONCURRENCY} from './constants';
+import type {CacheAutoKeyParams} from './types';
 
 /**
  * Query definition for cache warming
@@ -10,7 +11,7 @@ export interface WarmQuery {
   /** Operation to execute */
   operation: Operation;
   /** Query arguments */
-  args: Record<string, unknown>;
+  args: JsArgs;
   /** Optional TTL override */
   ttl?: number;
   /** Optional stale time override */
@@ -71,11 +72,7 @@ export interface WarmResult {
 export const createCacheWarmer = (
   prisma: unknown,
   config: {ttl: number; stale?: number},
-  getAutoKey: (params: {
-    args: unknown;
-    model: string;
-    operation: string;
-  }) => string,
+  getAutoKey: (params: CacheAutoKeyParams) => string,
 ) => {
   return async (
     queries: WarmQuery[],
