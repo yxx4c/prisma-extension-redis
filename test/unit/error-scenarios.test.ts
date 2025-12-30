@@ -10,6 +10,7 @@ import {
   getCache,
   PrismaExtensionRedis,
   type RedisOptions,
+  unlinkPatterns,
 } from '../../src';
 import {users} from '../data';
 import {PrismaClient} from '../prisma/generated/prisma/client';
@@ -759,5 +760,150 @@ describe('Invalid Cache Type in getCache', () => {
         query: async () => ({id: 1}),
       }),
     ).rejects.toThrow('Incorrect CacheType provided');
+  });
+});
+
+describe('unlinkPatterns Stream Error', () => {
+  test('should reject when scanStream emits error', async () => {
+    const mockStream = {
+      on: (event: string, callback: (...args: unknown[]) => void) => {
+        if (event === 'error') {
+          setTimeout(() => callback(new Error('Scan stream error')), 10);
+        }
+        return mockStream;
+      },
+    };
+
+    const mockRedis = {
+      scanStream: () => mockStream,
+    };
+
+    const promises = unlinkPatterns({
+      redis: mockRedis as unknown as Redis,
+      patterns: ['test:*'],
+    });
+
+    await expect(Promise.all(promises)).rejects.toThrow('Scan stream error');
+  });
+});
+
+describe('parseRedisTime Success Path', () => {
+  test('should use Redis TIME when valid response is returned', async () => {
+    const key = 'test:redis:time:valid';
+
+    // Mock Redis that returns valid TIME result
+    // TIME returns [seconds, microseconds] as strings
+    const mockRedis = {
+      multi: () => ({
+        call: () => mockRedis.multi(),
+        exec: async () => [
+          [null, null], // GET result (cache miss)
+          [null, ['1704067200', '123456']], // TIME result: 2024-01-01 00:00:00 UTC
+        ],
+      }),
+      del: async () => 1,
+    };
+
+    const result = await getCache({
+      ttl: 60,
+      stale: 30,
+      config: {
+        ttl: 60,
+        stale: 30,
+        type: 'JSON',
+      },
+      key,
+      redis: mockRedis as unknown as Redis,
+      args: {},
+      query: async () => ({id: 1}),
+    });
+
+    // Verify the timestamp was parsed from Redis TIME (1704067200 seconds)
+    // cachedAt should be the Redis server time, not Date.now()
+    expect(result.meta.cachedAt).toBe(1704067200);
+    expect(result.meta.expiresAt).toBe(1704067200 + 60);
+    expect(result.meta.staleUntil).toBe(1704067200 + 60 + 30);
+  });
+});
+
+describe('cleanupOrphanedKeys Delete Promise Rejection', () => {
+  test('should reject when unlink fails during end processing', async () => {
+    let endCallback: (() => void) | null = null;
+
+    const mockStream = {
+      on: (event: string, callback: (...args: unknown[]) => void) => {
+        if (event === 'data') {
+          // Emit orphaned keys
+          setTimeout(
+            () => callback(['prisma:orphaned:key1', 'prisma:orphaned:key2']),
+            5,
+          );
+        }
+        if (event === 'end') {
+          endCallback = callback as () => void;
+          // Trigger end after data
+          setTimeout(() => endCallback?.(), 20);
+        }
+        return mockStream;
+      },
+    };
+
+    const mockRedis = {
+      scanStream: () => mockStream,
+      unlink: async () => {
+        throw new Error('Unlink failed');
+      },
+    };
+
+    await expect(
+      cleanupOrphanedKeys({
+        redis: mockRedis as unknown as Redis,
+        validModels: ['User'],
+        prefix: 'prisma',
+        delimiter: ':',
+        dryRun: false,
+      }),
+    ).rejects.toThrow('Unlink failed');
+  });
+});
+
+describe('flushModelCache Invalid Model Name', () => {
+  test('should throw error for model name with wildcard', async () => {
+    const mockRedis = {} as Redis;
+
+    await expect(
+      flushModelCache({
+        redis: mockRedis,
+        model: 'User*',
+        prefix: 'prisma',
+        delimiter: ':',
+      }),
+    ).rejects.toThrow('Invalid model name');
+  });
+
+  test('should throw error for model name with hyphen', async () => {
+    const mockRedis = {} as Redis;
+
+    await expect(
+      flushModelCache({
+        redis: mockRedis,
+        model: 'my-model',
+        prefix: 'prisma',
+        delimiter: ':',
+      }),
+    ).rejects.toThrow('Invalid model name');
+  });
+
+  test('should throw error for model name starting with number', async () => {
+    const mockRedis = {} as Redis;
+
+    await expect(
+      flushModelCache({
+        redis: mockRedis,
+        model: '123Model',
+        prefix: 'prisma',
+        delimiter: ':',
+      }),
+    ).rejects.toThrow('Invalid model name');
   });
 });
