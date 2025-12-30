@@ -123,20 +123,24 @@ export const cleanupOrphanedKeys = async ({
     });
 
     stream.on('end', async () => {
-      // Delete remaining keys in buffer
-      if (!dryRun && deleteBuffer.length > 0) {
-        deletePromises.push(redis.unlink(...deleteBuffer));
+      try {
+        // Delete remaining keys in buffer
+        if (!dryRun && deleteBuffer.length > 0) {
+          deletePromises.push(redis.unlink(...deleteBuffer));
+        }
+
+        // Wait for all deletes to complete
+        await Promise.all(deletePromises);
+
+        resolve({
+          scannedKeys,
+          orphanedKeys,
+          deletedCount: dryRun ? 0 : orphanedKeys.length,
+          durationMs: Date.now() - startTime,
+        });
+      } catch (error) {
+        reject(error);
       }
-
-      // Wait for all deletes to complete
-      await Promise.all(deletePromises);
-
-      resolve({
-        scannedKeys,
-        orphanedKeys,
-        deletedCount: dryRun ? 0 : orphanedKeys.length,
-        durationMs: Date.now() - startTime,
-      });
     });
   });
 };
@@ -239,6 +243,13 @@ export const flushModelCache = async ({
   delimiter = DEFAULT_DELIMITER,
   batchSize = DEFAULT_CHUNK_SIZE,
 }: FlushModelOptions): Promise<{deletedCount: number; durationMs: number}> => {
+  // Validate model name to prevent injection of Redis wildcards
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(model)) {
+    throw new Error(
+      `Invalid model name: "${model}". Model names must start with a letter or underscore and contain only alphanumeric characters and underscores.`,
+    );
+  }
+
   const startTime = Date.now();
   const pattern = `${prefix}${delimiter}${model.toLowerCase()}${delimiter}*`;
   let deletedCount = 0;
@@ -261,17 +272,21 @@ export const flushModelCache = async ({
     stream.on('error', reject);
 
     stream.on('end', async () => {
-      if (buffer.length > 0) {
-        deletedCount += buffer.length;
-        deletePromises.push(redis.unlink(...buffer));
+      try {
+        if (buffer.length > 0) {
+          deletedCount += buffer.length;
+          deletePromises.push(redis.unlink(...buffer));
+        }
+
+        await Promise.all(deletePromises);
+
+        resolve({
+          deletedCount,
+          durationMs: Date.now() - startTime,
+        });
+      } catch (error) {
+        reject(error);
       }
-
-      await Promise.all(deletePromises);
-
-      resolve({
-        deletedCount,
-        durationMs: Date.now() - startTime,
-      });
     });
   });
 };

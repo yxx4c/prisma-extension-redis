@@ -51,12 +51,8 @@ bun add prisma-extension-redis
 Before setting up caching, initialize your Prisma client and Redis client config:
 
 ```javascript
-import pino from 'pino';
 import { PrismaClient } from '@prisma/client';
-import {SuperJSON} from 'superjson';
-
 import {
-  CacheCase,
   PrismaExtensionRedis,
   type AutoCacheConfig,
   type CacheConfig,
@@ -111,11 +107,12 @@ const config: CacheConfig = {
  ttl: 60, // Default Time-to-live for caching in seconds
   stale: 30, // Default Stale time after ttl in seconds
   auto, // Auto-caching options (configured above)
-  transformer: {
-    // Custom serialize and deserialize function for additional functionality if required
-    deserialize: data => SuperJSON.parse(data),
-    serialize: data => SuperJSON.stringify(data),
-  },
+  // Optional: Custom serialization (requires 'superjson' package)
+  // import SuperJSON from 'superjson';
+  // transformer: {
+  //   deserialize: data => SuperJSON.parse(data),
+  //   serialize: data => SuperJSON.stringify(data),
+  // },
   type: 'JSON', // Redis cache type, whether you prefer the data to be stored as JSON or STRING in Redis
   cacheKey: { // Inbuilt cache key configuration
     // caseTransformer?: Function to transform cache key (default: snake_case)
@@ -442,6 +439,7 @@ console.log(`Deleted ${result.deletedCount} orphaned keys`);
 
 ## Prerequisites
 
+- **Prisma 7 or higher** is required. This package uses the Prisma 7 driver adapter pattern.
 - Ensure you have a running Redis or Dragonfly instance. If using Redis, `Redis.JSON` must be enabled to use JSON type cache (by default, it is enabled in Dragonfly).
 
 ## Dependencies
@@ -456,4 +454,3 @@ console.log(`Deleted ${result.deletedCount} orphaned keys`);
 `prisma-extension-redis` offers an efficient and powerful way to manage caching in Prisma-based applications. By leveraging both automatic and custom caching, you can optimize your application's performance while maintaining data consistency.
 
 Upgrade to `prisma-extension-redis` for an optimized caching strategy and contribute to its growth by starring the repository if you find it useful!
-# Test release trigger

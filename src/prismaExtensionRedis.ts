@@ -26,6 +26,27 @@ import type {
 } from './types';
 import {validateConfig} from './validation';
 
+/**
+ * Creates a Prisma extension that adds Redis caching capabilities.
+ *
+ * @param options - Configuration options for the extension
+ * @param options.config - Cache configuration (ttl, stale, auto, type, etc.)
+ * @param options.client - Redis connection options (host, port, etc.)
+ * @returns A Prisma extension with caching methods and automatic query caching
+ *
+ * @example
+ * ```typescript
+ * import { PrismaClient } from '@prisma/client';
+ * import { PrismaExtensionRedis } from 'prisma-extension-redis';
+ *
+ * const prisma = new PrismaClient().$extends(
+ *   PrismaExtensionRedis({
+ *     config: { ttl: 60, stale: 30, auto: true, type: 'JSON' },
+ *     client: { host: 'localhost', port: 6379 },
+ *   })
+ * );
+ * ```
+ */
 export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   const {
     config,
@@ -51,13 +72,49 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',
     client: {
+      /** The Redis client instance for direct access if needed */
       redis,
+
+      /**
+       * Generates a cache key from the provided parameters.
+       * @param options - Key generation options
+       * @param options.params - Array of key-value pairs to include in the key
+       * @returns A formatted cache key string
+       * @example
+       * ```typescript
+       * const key = prisma.getKey({ params: [{ prisma: 'User' }, { id: 1 }] });
+       * // Returns: 'prisma:user:id:1'
+       * ```
+       */
       getKey,
+
+      /**
+       * Generates a cache key pattern for wildcard invalidation.
+       * @param options - Pattern generation options
+       * @param options.params - Array of key-value pairs, use '*' or 'glob' for wildcards
+       * @returns A pattern string for Redis SCAN matching
+       * @example
+       * ```typescript
+       * const pattern = prisma.getKeyPattern({ params: [{ prisma: 'User' }, { glob: '*' }] });
+       * // Returns: 'prisma:user:*'
+       * ```
+       */
       getKeyPattern,
+
+      /**
+       * Generates an auto-cache key based on model, operation, and arguments.
+       * Used internally for automatic cache key generation.
+       * @param options - Auto-key generation options
+       * @param options.model - The Prisma model name
+       * @param options.operation - The Prisma operation (findUnique, findMany, etc.)
+       * @param options.args - The query arguments
+       * @returns A unique cache key for the query
+       */
       getAutoKey,
 
       /**
        * Get cache statistics for monitoring.
+       * @returns Cache statistics including total keys, keys by model, and estimated size
        */
       getCacheStats: () =>
         getCacheStats(redis, configuredPrefix, configuredDelimiter),

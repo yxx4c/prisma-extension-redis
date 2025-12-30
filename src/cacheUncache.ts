@@ -47,7 +47,7 @@ export const unlinkPatterns = ({
 }: DeletePatterns) =>
   patterns.map(
     pattern =>
-      new Promise<boolean>(resolve => {
+      new Promise<boolean>((resolve, reject) => {
         const stream = redis.scanStream({match: pattern});
         const buffer: string[] = [];
         const activeBatches: Promise<
@@ -72,16 +72,23 @@ export const unlinkPatterns = ({
             execBatch(buffer.splice(0, chunkSize));
         });
 
+        stream.on('error', error => {
+          reject(error);
+        });
+
         stream.on('end', () => {
           if (buffer.length) execBatch(buffer.splice(0, buffer.length));
-          Promise.all(activeBatches).then(() => resolve(true));
+          Promise.all(activeBatches)
+            .then(() => resolve(true))
+            .catch(reject);
         });
       }),
   );
 
 const commands: RedisCacheCommands = {
   JSON: {
-    get: (redis, key) => redis.multi().call('JSON.GET', key).exec(),
+    get: (redis, key) =>
+      redis.multi().call('JSON.GET', key).call('TIME').exec(),
 
     set: (redis, key, value, ttl) => {
       const multi = redis.multi().call('JSON.SET', key, '$', value);
@@ -92,7 +99,7 @@ const commands: RedisCacheCommands = {
     },
   },
   STRING: {
-    get: (redis, key) => redis.multi().call('GET', key).exec(),
+    get: (redis, key) => redis.multi().call('GET', key).call('TIME').exec(),
 
     set: (redis, key, value, ttl) => {
       const multi = redis.multi().call('SET', key, value);
@@ -102,6 +109,24 @@ const commands: RedisCacheCommands = {
       return multi.exec();
     },
   },
+};
+
+/**
+ * Parses Redis TIME command result to get Unix timestamp in seconds.
+ * Redis TIME returns [seconds, microseconds] as strings.
+ * Falls back to Date.now() if parsing fails.
+ */
+const parseRedisTime = (timeResult: unknown): number => {
+  if (
+    Array.isArray(timeResult) &&
+    timeResult.length === 2 &&
+    typeof timeResult[0] === 'string'
+  ) {
+    const seconds = Number.parseInt(timeResult[0], 10);
+    if (!Number.isNaN(seconds)) return seconds;
+  }
+  // Fallback to local time if Redis TIME parsing fails
+  return Date.now() / 1000;
 };
 
 /**
@@ -142,7 +167,11 @@ export const getCache = async ({
   // Track errors during cache operations
   const errors: CacheErrors = {};
 
-  const [[error, cached]] = (await command.get(redis, key)) ?? [];
+  const getResult = (await command.get(redis, key)) ?? [];
+  // Safely destructure - getResult may have 1 or 2 elements depending on implementation
+  const cacheResult = getResult[0] ?? [null, null];
+  const timeResultEntry = getResult[1];
+  const [error, cached] = cacheResult;
 
   // Track cache read errors
   if (error) {
@@ -152,7 +181,11 @@ export const getCache = async ({
     if (onError) onError(error);
   }
 
-  const timestamp = Date.now() / 1000;
+  // Use Redis server time for consistent timestamp across distributed systems
+  // Falls back to local time if TIME result is not available
+  const timestamp = timeResultEntry
+    ? parseRedisTime(timeResultEntry[1])
+    : Date.now() / 1000;
 
   const args = {
     ...xArgs,
@@ -226,7 +259,7 @@ export const getCache = async ({
           key,
           source: 'db',
           expiresAt: timestamp + ttl,
-          staleUntil: timestamp + stale,
+          staleUntil: timestamp + ttl + stale,
           cachedAt: timestamp,
           recache: createRecache(),
           uncache: createUncache(),
@@ -262,7 +295,7 @@ export const getCache = async ({
           key,
           recache: createRecache(),
           source: 'cache',
-          staleUntil: cacheTime + cacheStale,
+          staleUntil: cacheTime + cacheTtl + cacheStale,
           uncache: createUncache(),
           errors: getErrorsMeta(),
         },
@@ -270,7 +303,7 @@ export const getCache = async ({
     }
 
     // Stale cache - return stale data and trigger background refresh
-    if (timestamp <= cacheTime + cacheStale) {
+    if (timestamp <= cacheTime + cacheTtl + cacheStale) {
       logger.debug(`Cache hit (stale), triggering background refresh`, {
         key,
         age: Math.round(timestamp - cacheTime),
@@ -329,7 +362,7 @@ export const getCache = async ({
           key,
           source: 'stale-cache',
           expiresAt: cacheTime + cacheTtl,
-          staleUntil: cacheTime + cacheStale,
+          staleUntil: cacheTime + cacheTtl + cacheStale,
           cachedAt: cacheTime,
           recache: createRecache(),
           uncache: createUncache(),
@@ -377,7 +410,7 @@ export const getCache = async ({
       key,
       source: 'db',
       expiresAt: timestamp + ttl,
-      staleUntil: timestamp + stale,
+      staleUntil: timestamp + ttl + stale,
       cachedAt: timestamp,
       recache: createRecache(),
       uncache: createUncache(),
