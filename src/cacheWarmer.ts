@@ -1,4 +1,4 @@
-import type {JsArgs, Operation} from '@prisma/client/runtime/library';
+import type {JsArgs, Operation} from '@prisma/client/runtime/client';
 import {DEFAULT_WARM_CONCURRENCY} from './constants';
 import type {CacheAutoKeyParams} from './types';
 

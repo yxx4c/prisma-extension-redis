@@ -1,15 +1,19 @@
 import {afterAll, beforeAll, describe, expect, mock, test} from 'bun:test';
-import {PrismaClient} from '@prisma/client';
+import {PrismaPg} from '@prisma/adapter-pg';
 import {
   PrismaExtensionRedis,
   type RedisOptions,
   type WarmQuery,
 } from '../../src';
 import {users} from '../data';
+import {PrismaClient} from '../prisma/generated/prisma/client';
 
 describe('Cache Warmer', () => {
   const client = process.env.REDIS_SERVICE_URI as RedisOptions;
-  const basePrisma = new PrismaClient();
+  const adapter = new PrismaPg({
+    connectionString: process.env.POSTGRES_SERVICE_URI,
+  });
+  const basePrisma = new PrismaClient({adapter});
 
   const prisma = basePrisma.$extends(
     PrismaExtensionRedis({

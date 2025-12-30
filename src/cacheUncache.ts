@@ -1,4 +1,4 @@
-import type {JsArgs, Operation} from '@prisma/client/runtime/library';
+import type {JsArgs, Operation} from '@prisma/client/runtime/client';
 import {coalesceAsync} from 'promise-coalesce';
 import type {getAutoKeyGen} from './cacheKey';
 import {DEFAULT_CHUNK_SIZE, DEFAULT_MAX_CONCURRENT_BATCHES} from './constants';

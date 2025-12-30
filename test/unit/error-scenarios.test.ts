@@ -1,5 +1,5 @@
 import {afterAll, beforeAll, describe, expect, mock, test} from 'bun:test';
-import {PrismaClient} from '@prisma/client';
+import {PrismaPg} from '@prisma/adapter-pg';
 import Redis from 'iovalkey';
 import {
   checkHealth,
@@ -12,11 +12,15 @@ import {
   type RedisOptions,
 } from '../../src';
 import {users} from '../data';
+import {PrismaClient} from '../prisma/generated/prisma/client';
 
 describe('Error Scenarios', () => {
   const client = process.env.REDIS_SERVICE_URI as RedisOptions;
   const redis = new Redis(client);
-  const basePrisma = new PrismaClient();
+  const adapter = new PrismaPg({
+    connectionString: process.env.POSTGRES_SERVICE_URI,
+  });
+  const basePrisma = new PrismaClient({adapter});
 
   // Extended prisma client for test setup (flushing db, etc)
   const _prisma = basePrisma.$extends(

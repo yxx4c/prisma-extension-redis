@@ -7,13 +7,17 @@ import {
   mock,
   test,
 } from 'bun:test';
-import {PrismaClient} from '@prisma/client';
+import {PrismaPg} from '@prisma/adapter-pg';
 import {PrismaExtensionRedis, type RedisOptions} from '../../src';
 import {users} from '../data';
+import {PrismaClient} from '../prisma/generated/prisma/client';
 
 describe('Event Hooks', () => {
   const client = process.env.REDIS_SERVICE_URI as RedisOptions;
-  const basePrisma = new PrismaClient();
+  const adapter = new PrismaPg({
+    connectionString: process.env.POSTGRES_SERVICE_URI,
+  });
+  const basePrisma = new PrismaClient({adapter});
 
   // Create mock functions
   const onHit = mock(() => {});
@@ -155,7 +159,10 @@ describe('Event Hooks', () => {
 
 describe('Event Hooks - Custom Cache', () => {
   const client = process.env.REDIS_SERVICE_URI as RedisOptions;
-  const basePrisma = new PrismaClient();
+  const adapter = new PrismaPg({
+    connectionString: process.env.POSTGRES_SERVICE_URI,
+  });
+  const basePrisma = new PrismaClient({adapter});
 
   const onHit = mock(() => {});
   const onMiss = mock(() => {});

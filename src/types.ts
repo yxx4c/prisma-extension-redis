@@ -5,7 +5,7 @@ import type {
   JsArgs,
   ModelQueryOptionsCbArgs,
   Operation,
-} from '@prisma/client/runtime/library';
+} from '@prisma/client/runtime/client';
 import type {Redis, RedisOptions} from 'iovalkey';
 import type {DebugLevelType} from './constants';
 import type {MetricsCollector} from './metrics';
