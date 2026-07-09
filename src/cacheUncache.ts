@@ -14,6 +14,7 @@ import {
   type CacheContext,
   type CacheErrors,
   type CacheOptions,
+  type CacheParams,
   type CacheSource,
   type CacheType,
   type DeletePatterns,
@@ -141,6 +142,65 @@ const toError = (err: unknown): Error =>
   err instanceof Error ? err : new Error(String(err));
 
 /**
+ * Writes a value to the cache directly, without an accompanying
+ * database operation. The entry uses the same envelope cached reads
+ * consume: the configured serializer, a server-synced timestamp, and a
+ * Redis lifetime of ttl + stale seconds.
+ *
+ * @param params - The cache write parameters
+ * @returns Promise resolving with the entry's timestamp window
+ */
+export const cache = async ({
+  redis,
+  key,
+  value,
+  config,
+  ttl,
+  stale,
+  clock,
+}: CacheParams): Promise<{
+  cachedAt: number;
+  expiresAt: number;
+  staleUntil: number;
+}> => {
+  const {transformer, type} = config;
+
+  if (!commands[type])
+    throw new Error(
+      'Incorrect CacheType provided! Supported values: JSON | STRING',
+    );
+
+  const effectiveTtl = ttl ?? config.ttl;
+  const effectiveStale = stale ?? config.stale;
+  validateCacheOptions({key, ttl: effectiveTtl, stale: effectiveStale});
+
+  const {api} = resolveRedisApi(redis);
+  const serverClock = clock ?? getServerClock(api);
+  const cachedAt = serverClock.nowSeconds();
+
+  const cacheContext: CacheContext = {
+    isCached: true,
+    result: value,
+    stale: effectiveStale,
+    timestamp: cachedAt,
+    ttl: effectiveTtl,
+  };
+
+  await commands[type].set(
+    api,
+    key,
+    (transformer?.serialize || JSON.stringify)(cacheContext),
+    effectiveTtl + effectiveStale,
+  );
+
+  return {
+    cachedAt,
+    expiresAt: cachedAt + effectiveTtl,
+    staleUntil: cachedAt + effectiveTtl + effectiveStale,
+  };
+};
+
+/**
  * Retrieves data from cache or database with stale-while-revalidate support.
  *
  * Timestamps come from a per-client ServerClock that periodically syncs
@@ -248,25 +308,21 @@ export const getCache = async ({
    * server time at write time. Returns the stamped timestamp.
    */
   const writeCache = async (result: unknown): Promise<number> => {
-    const cachedAt = serverClock.nowSeconds();
-    const newCacheContext: CacheContext = {
-      isCached: true,
-      result,
-      stale,
-      timestamp: cachedAt,
-      ttl,
-    };
     try {
-      await command.set(
-        api,
+      const {cachedAt} = await cache({
+        redis: api,
         key,
-        (transformer?.serialize || JSON.stringify)(newCacheContext),
-        ttl + stale,
-      );
+        value: result,
+        config,
+        ttl,
+        stale,
+        clock: serverClock,
+      });
+      return cachedAt;
     } catch (writeError) {
       reportError('cacheWrite', writeError, `Cache write error`);
+      return serverClock.nowSeconds();
     }
-    return cachedAt;
   };
 
   const queryAndCache = async (): Promise<InternalCacheResult> => {

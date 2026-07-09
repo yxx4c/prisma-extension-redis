@@ -139,6 +139,23 @@ describe('Custom RedisApi adapter (client-agnostic end-to-end)', () => {
     ).toHaveLength(0);
   });
 
+  test('prisma.cache plants values served without a database round trip', async () => {
+    const key = prisma.getKey({params: [{prisma: 'User'}, {planted: '1'}]});
+    const planted = {id: 999, name: 'from-cache-only', email: 'planted@x.y'};
+
+    const stamped = await prisma.cache({key, value: planted});
+    expect(stamped.staleUntil).toBe(stamped.cachedAt + 60 + 30);
+
+    const read = await prisma.user.findUnique({
+      where: {email: userOne.email},
+      cache: {key},
+      meta: true,
+    });
+
+    expect(read.meta.source).toBe('cache');
+    expect(read.result).toEqual(planted);
+  });
+
   test('maintenance utilities run against the custom client', async () => {
     await prisma.user.findUnique({where: {email: userOne.email}});
 

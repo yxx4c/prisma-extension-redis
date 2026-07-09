@@ -553,6 +553,45 @@ export type DeletePatterns = {
   maxConcurrentBatches?: number;
 };
 
+export type CacheParams = {
+  /**
+   * Redis client, instance or RedisApi (see PrismaExtensionRedisOptions.client)
+   */
+  redis: RedisClientInput;
+
+  /**
+   * Key to cache the value under
+   */
+  key: string;
+
+  /**
+   * Value to cache; stored in the same envelope cached reads consume
+   */
+  value: unknown;
+
+  /**
+   * Cache config providing the storage type, serializer, and default
+   * ttl/stale values
+   */
+  config: CacheConfig;
+
+  /**
+   * Freshness window in seconds; defaults to config.ttl
+   */
+  ttl?: number;
+
+  /**
+   * Extra stale window in seconds after ttl; defaults to config.stale
+   */
+  stale?: number;
+
+  /**
+   * Server-synced clock for timestamps. When omitted, the shared clock
+   * for the resolved client is used
+   */
+  clock?: ServerClock;
+};
+
 export type UncacheParams = {
   /**
    * Redis client, instance or RedisApi (see PrismaExtensionRedisOptions.client)

@@ -285,6 +285,21 @@ const { deleted } = await extendedPrisma.uncache({
 
 Exact keys are removed immediately with `UNLINK`; keys containing glob characters (`*` or `?`) are expanded with `SCAN` when `hasPattern` is true. The same function is available as a standalone import for use outside the extension: `import { uncache } from 'prisma-extension-redis'`.
 
+### Direct Cache Population
+
+Values can be written to the cache directly with the `cache` client method — useful for pre-warming with externally computed data or syncing entries from another source. The entry uses the same envelope cached reads consume, so auto and custom cached queries serve it until it expires after `ttl + stale` seconds:
+
+```javascript
+const { cachedAt, expiresAt, staleUntil } = await extendedPrisma.cache({
+  key: extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] }),
+  value: user,
+  ttl: 60,   // optional, defaults to config.ttl
+  stale: 30, // optional, defaults to config.stale
+});
+```
+
+Also available as a standalone import: `import { cache } from 'prisma-extension-redis'`.
+
 ---
 
 ## Key Concepts Explained

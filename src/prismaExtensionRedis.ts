@@ -3,6 +3,7 @@ import type Redis from 'iovalkey';
 import {getAutoKeyGen, getKeyGen, getKeyPatternGen} from './cacheKey';
 import {
   autoCacheAction,
+  cache,
   customCacheAction,
   customUncacheAction,
   isAutoCacheEnabled,
@@ -23,6 +24,7 @@ import {
 } from './maintenance';
 import {getServerClock, resolveRedisApi} from './redisApi';
 import type {
+  CacheParams,
   ExtendedModel,
   NonCachedMetaResult,
   PrismaExtensionRedisOptions,
@@ -170,6 +172,21 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
           delimiter: configuredDelimiter,
           ...opts,
         }),
+
+      /**
+       * Write a value to the cache directly, without a database
+       * operation. The entry uses the same envelope cached reads
+       * consume, so auto and custom cached queries serve it until it
+       * expires after ttl + stale seconds.
+       * @param options - Key, value, and optional ttl/stale overrides
+       * @returns The entry's cachedAt/expiresAt/staleUntil timestamps
+       * @example
+       * ```typescript
+       * await prisma.cache({key: 'prisma:user:id:1', value: user, ttl: 60});
+       * ```
+       */
+      cache: (options: Omit<CacheParams, 'redis' | 'config' | 'clock'>) =>
+        cache({redis: api, config, clock, ...options}),
 
       /**
        * Delete cache entries directly, without a database operation.
