@@ -59,6 +59,8 @@ jobs:
     name: publish
     needs: test
     runs-on: ubuntu-latest
+    # Must match the npm trusted publisher config (OIDC environment claim)
+    environment: production
     permissions:
       contents: write
       issues: write
@@ -105,6 +107,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_NPM_CONFIG_REGISTRY: https://npm.pkg.github.com/
           GITHUB_NPM_TOKEN: ${{ secrets.GH_NPM_TOKEN }}
+          # registry.npmjs.org authenticates via OIDC trusted publishing
+          # (environment: production + id-token: write); tokens are disallowed
           PUBLIC_NPM_CONFIG_REGISTRY: https://registry.npmjs.org
-          PUBLIC_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: bun run release
