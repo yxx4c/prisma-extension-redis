@@ -76,42 +76,54 @@ class Hasher {
 }
 
 const visit = (h: Hasher, value: unknown): void => {
-  if (value === null) return h.tag(TAG.NULL);
+  if (value === null) {
+    h.tag(TAG.NULL);
+    return;
+  }
 
   switch (typeof value) {
     case 'undefined':
-      return h.tag(TAG.UNDEFINED);
+      h.tag(TAG.UNDEFINED);
+      return;
     case 'boolean':
-      return h.tag(value ? TAG.TRUE : TAG.FALSE);
+      h.tag(value ? TAG.TRUE : TAG.FALSE);
+      return;
     case 'number':
       h.tag(TAG.NUMBER);
-      return h.str(value.toString());
+      h.str(value.toString());
+      return;
     case 'bigint':
       h.tag(TAG.BIGINT);
-      return h.str(value.toString());
+      h.str(value.toString());
+      return;
     case 'string':
       h.tag(TAG.STRING);
-      return h.str(value);
+      h.str(value);
+      return;
     case 'function':
     case 'symbol':
       h.tag(TAG.OPAQUE);
-      return h.str(String(value));
+      h.str(String(value));
+      return;
   }
 
   if (value instanceof Date) {
     h.tag(TAG.DATE);
-    return h.str(value.getTime().toString());
+    h.str(value.getTime().toString());
+    return;
   }
 
   if (Array.isArray(value)) {
     h.tag(TAG.ARRAY_START);
     for (const item of value) visit(h, item);
-    return h.tag(TAG.ARRAY_END);
+    h.tag(TAG.ARRAY_END);
+    return;
   }
 
   if (value instanceof Uint8Array) {
     h.tag(TAG.BYTES);
-    return h.bytes(value);
+    h.bytes(value);
+    return;
   }
 
   h.tag(TAG.OBJECT_START);

@@ -1,7 +1,5 @@
 export type {Redis, RedisOptions} from 'iovalkey';
 export {getKeyGen, getKeyPatternGen} from './cacheKey';
-export {coalesce} from './coalesce';
-export {stableHash} from './hash';
 export {
   filterOperations,
   getCache,
@@ -10,6 +8,7 @@ export {
 } from './cacheUncache';
 export type {WarmOptions, WarmQuery, WarmResult} from './cacheWarmer';
 export {createCacheWarmer} from './cacheWarmer';
+export {coalesce} from './coalesce';
 export type {
   CacheSourceType,
   CacheTypeValue,
@@ -32,6 +31,7 @@ export {
 } from './constants';
 export type {DebugLevel, DebugLogger} from './debug';
 export {createDebugLogger, noopLogger} from './debug';
+export {stableHash} from './hash';
 export type {HealthResult, HealthStatus} from './healthCheck';
 export {checkHealth} from './healthCheck';
 export type {
@@ -48,6 +48,19 @@ export {
 export type {CacheMetrics, MetricsCollector} from './metrics';
 export {createMetricsCollector} from './metrics';
 export {PrismaExtensionRedis} from './prismaExtensionRedis';
+export type {
+  IoValkeyLike,
+  RedisApi,
+  RedisClientInput,
+  ServerClock,
+  UpstashLike,
+} from './redisApi';
+export {
+  createServerClock,
+  fromIoValkeyLike,
+  fromUpstashLike,
+  resolveRedisApi,
+} from './redisApi';
 export type {
   AutoCacheConfig,
   CacheConfig,

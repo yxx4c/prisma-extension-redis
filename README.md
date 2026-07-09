@@ -139,6 +139,62 @@ const extendedPrisma = prisma.$extends(
 
 ---
 
+## Bring Your Own Redis Client
+
+The `client` option is Redis-package agnostic. It accepts any of the following:
+
+**1. Connection options or a URI string** — an [iovalkey](https://github.com/valkey-io/iovalkey) client is constructed for you (the classic behavior):
+
+```typescript
+PrismaExtensionRedis({ config, client: { host: 'localhost', port: 6379 } });
+PrismaExtensionRedis({ config, client: 'redis://localhost:6379' });
+```
+
+**2. An existing ioredis-compatible instance** (`iovalkey`, `ioredis`, valkey clients) — you own the connection lifecycle:
+
+```typescript
+import { Redis } from 'ioredis';
+
+const redis = new Redis(process.env.REDIS_URL);
+PrismaExtensionRedis({ config, client: redis });
+```
+
+**3. An Upstash-style REST client** (`@upstash/redis`) — detected and wrapped automatically; works with `automaticDeserialization` on or off:
+
+```typescript
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+PrismaExtensionRedis({ config, client: redis });
+```
+
+**4. Any custom `RedisApi` implementation** — implement one small interface and any store works (see [docs/ADAPTERS.md](docs/ADAPTERS.md) for the full contract):
+
+```typescript
+import { PrismaExtensionRedis, type RedisApi } from 'prisma-extension-redis';
+
+const myClient: RedisApi = {
+  get: async (key) => /* ... */,
+  set: async (key, value, ttlSeconds) => /* ... */,
+  jsonGet: async (key) => /* ... */,
+  jsonSet: async (key, value, ttlSeconds) => /* ... */,
+  del: async (keys) => /* ... */,
+  unlink: async (keys) => /* ... */,
+  scan: async (cursor, match, count) => /* ... */,
+  time: async () => /* server Unix seconds (optional) */,
+  ping: async () => 'PONG',
+};
+
+PrismaExtensionRedis({ config, client: myClient });
+```
+
+**Timestamp consistency**: the extension keeps cache timestamps aligned with the Redis server clock by syncing a time offset (via `TIME`) at most every 5 seconds — reads stay a single `GET`. Clients without `TIME` support fall back to the local clock; sync failures are reported through `onError` and debug logging.
+
+---
+
 ## Usage Guide
 
 ### Automatic Caching
@@ -449,9 +505,8 @@ console.log(`Deleted ${result.deletedCount} orphaned keys`);
 
 ## Dependencies
 
-- `iovalkey` package is used for Redis connectivity.
-- `object-code` is used for generating unique hash in auto-caching keys.
-- `promise-coalesce` deduplicates concurrent reads of the same cache key.
+- `iovalkey` is the only runtime dependency, used to construct a client when you pass connection options. Bring your own client (ioredis, @upstash/redis, or a custom `RedisApi`) and it is the only connection layer used.
+- Auto-cache key hashing and concurrent-read coalescing are implemented inline (no external hashing or coalescing libraries).
 
 ---
 

@@ -1,5 +1,5 @@
 import {Prisma} from '@prisma/client/extension';
-import Redis from 'iovalkey';
+import type Redis from 'iovalkey';
 import {getAutoKeyGen, getKeyGen, getKeyPatternGen} from './cacheKey';
 import {
   autoCacheAction,
@@ -12,6 +12,7 @@ import {
 import type {WarmOptions, WarmQuery} from './cacheWarmer';
 import {createCacheWarmer} from './cacheWarmer';
 import {DEFAULT_DELIMITER, DEFAULT_PREFIX} from './constants';
+import {createDebugLogger, noopLogger} from './debug';
 import {checkHealth} from './healthCheck';
 import type {CleanupOptions, FlushModelOptions} from './maintenance';
 import {
@@ -19,6 +20,7 @@ import {
   flushModelCache,
   getCacheStats,
 } from './maintenance';
+import {getServerClock, resolveRedisApi} from './redisApi';
 import type {
   ExtendedModel,
   NonCachedMetaResult,
@@ -59,7 +61,22 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
 
   const {delimiter, caseTransformer, prefix} = cacheKey ?? {};
 
-  const redis = new Redis(redisOptions);
+  // Accepts RedisOptions/connection string (an iovalkey client is
+  // constructed), an ioredis-compatible instance, an Upstash-style REST
+  // client, or a custom RedisApi implementation
+  const {api, raw} = resolveRedisApi(redisOptions);
+  const redis = raw as Redis;
+
+  // Keep cache timestamps aligned with the Redis server's clock; sync
+  // failures degrade to the local clock and are reported for visibility
+  const logger = config.debug ? createDebugLogger(config.debug) : noopLogger;
+  const clock = getServerClock(api, error => {
+    logger.warn(`Redis TIME sync failed; timestamps use the local clock`, {
+      error: error.message,
+    });
+    if (config.onError) config.onError(error);
+  });
+  void clock.prime();
 
   const getKey = getKeyGen(delimiter, caseTransformer, prefix);
   const getAutoKey = getAutoKeyGen(getKey);
@@ -72,7 +89,10 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',
     client: {
-      /** The Redis client instance for direct access if needed */
+      /**
+       * The Redis client you supplied (or the iovalkey instance
+       * constructed from your options) for direct access if needed.
+       */
       redis,
 
       /**
@@ -117,7 +137,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
        * @returns Cache statistics including total keys, keys by model, and estimated size
        */
       getCacheStats: () =>
-        getCacheStats(redis, configuredPrefix, configuredDelimiter),
+        getCacheStats(api, configuredPrefix, configuredDelimiter),
 
       /**
        * Clean up cache keys for models that no longer exist in the schema.
@@ -127,7 +147,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
         opts?: Partial<Omit<CleanupOptions, 'redis' | 'validModels'>>,
       ) =>
         cleanupOrphanedKeys({
-          redis,
+          redis: api,
           validModels,
           prefix: configuredPrefix,
           delimiter: configuredDelimiter,
@@ -142,7 +162,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
         opts?: Partial<Omit<FlushModelOptions, 'redis' | 'model'>>,
       ) =>
         flushModelCache({
-          redis,
+          redis: api,
           model,
           prefix: configuredPrefix,
           delimiter: configuredDelimiter,
@@ -152,7 +172,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
       /**
        * Check Redis connection health.
        */
-      healthCheck: () => checkHealth(redis),
+      healthCheck: () => checkHealth(api),
 
       /**
        * Warm the cache with predefined queries.
@@ -194,7 +214,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
           if (isAutoCacheEnabled({auto, options}))
             return autoCacheAction(
               {
-                redis,
+                redis: api,
                 options,
                 config,
               },
@@ -203,14 +223,14 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
 
           if (isCustomCacheEnabled({options}))
             return customCacheAction({
-              redis,
+              redis: api,
               options,
               config,
             });
 
           if (isCustomUncacheEnabled({options}))
             return customUncacheAction({
-              redis,
+              redis: api,
               options,
               config,
             });

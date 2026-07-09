@@ -4,10 +4,9 @@ import {
   type CacheConfig,
   PrismaExtensionRedis,
 } from 'prisma-extension-redis';
-import {PrismaClient} from './prisma/generated/prisma/client';
-
 import {users} from './data';
 import env from './env';
+import {PrismaClient} from './prisma/generated/prisma/client';
 import {getRandomValue} from './utils';
 
 // Create a Redis client

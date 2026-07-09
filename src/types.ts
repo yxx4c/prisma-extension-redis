@@ -6,9 +6,9 @@ import type {
   ModelQueryOptionsCbArgs,
   Operation,
 } from '@prisma/client/runtime/client';
-import type {Redis, RedisOptions} from 'iovalkey';
 import type {DebugLevelType} from './constants';
 import type {MetricsCollector} from './metrics';
+import type {RedisClientInput, ServerClock} from './redisApi';
 
 export const ALL_OPERATIONS = [
   '$executeRaw',
@@ -522,16 +522,20 @@ export interface PrismaExtensionRedisOptions {
   config: CacheConfig;
 
   /**
-   * Redis client config (iovalkey)
+   * Redis connection. Accepts iovalkey RedisOptions or a connection
+   * string (a client is constructed for you), an existing
+   * ioredis-compatible instance (iovalkey, ioredis, valkey), an
+   * Upstash-style REST client (@upstash/redis), or any custom RedisApi
+   * implementation.
    */
-  client: RedisOptions;
+  client: RedisClientInput;
 }
 
 export type DeletePatterns = {
   /**
-   * Redis client
+   * Redis client, instance or RedisApi (see PrismaExtensionRedisOptions.client)
    */
-  redis: Redis;
+  redis: RedisClientInput;
 
   /**
    * Patterns for key deletion
@@ -556,9 +560,9 @@ export type ActionParams = {
   options: ModelQueryOptionsCbArgs;
 
   /**
-   * Redis client
+   * Redis client, instance or RedisApi
    */
-  redis: Redis;
+  redis: RedisClientInput;
 
   /**
    * CacheConfig
@@ -593,9 +597,14 @@ export type GetDataParams = {
   stale: number;
   config: CacheConfig;
   key: string;
-  redis: Redis;
+  redis: RedisClientInput;
   args: JsArgs;
   query: (args: JsArgs) => Promise<unknown>;
+  /**
+   * Server-synced clock for timestamps. When omitted, the shared clock
+   * for the resolved client is used.
+   */
+  clock?: ServerClock;
 };
 
 export type CacheContext = {
@@ -606,23 +615,6 @@ export type CacheContext = {
   timestamp: number;
   ttl: number;
 };
-
-export type RedisCacheResultOrError =
-  | [error: Error | null, result: unknown][]
-  | null;
-
-export type RedisCacheCommands = Record<
-  string,
-  {
-    get: (redis: Redis, key: string) => Promise<RedisCacheResultOrError>;
-    set: (
-      redis: Redis,
-      key: string,
-      value: string,
-      ttl: number,
-    ) => Promise<RedisCacheResultOrError>;
-  }
->;
 
 export type CacheKeyParams = {
   /**

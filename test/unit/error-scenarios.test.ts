@@ -12,7 +12,9 @@ import {
   type RedisOptions,
   unlinkPatterns,
 } from '../../src';
+import {createServerClock} from '../../src/redisApi';
 import {users} from '../data';
+import {createFakeRedisApi} from '../fakeRedisApi';
 import {PrismaClient} from '../prisma/generated/prisma/client';
 
 describe('Error Scenarios', () => {
@@ -264,14 +266,10 @@ describe('Error Scenarios', () => {
     test('should convert string error to Error instance', async () => {
       const key = 'test:toError:string';
 
-      // Return a string error (not an Error instance) to trigger toError conversion
-      const mockRedis = {
-        multi: () => ({
-          call: () => mockRedis.multi(),
-          exec: async () => [['Redis string error', null]], // String, not Error
-        }),
-        del: async () => 1,
-      };
+      // Reject with a string (not an Error instance) to trigger toError conversion
+      const mockRedis = createFakeRedisApi({
+        jsonGet: () => Promise.reject('Redis string error'),
+      });
 
       const onError = mock(() => {});
 
@@ -285,7 +283,7 @@ describe('Error Scenarios', () => {
           onError,
         },
         key,
-        redis: mockRedis as unknown as typeof redis,
+        redis: mockRedis,
         args: {},
         query: async () => ({id: 1}),
       });
@@ -299,14 +297,10 @@ describe('Error Scenarios', () => {
     test('should convert number error to Error instance', async () => {
       const key = 'test:toError:number';
 
-      // Return a number error to trigger toError conversion
-      const mockRedis = {
-        multi: () => ({
-          call: () => mockRedis.multi(),
-          exec: async () => [[42, null]], // Number, not Error
-        }),
-        del: async () => 1,
-      };
+      // Reject with a number to trigger toError conversion
+      const mockRedis = createFakeRedisApi({
+        jsonGet: () => Promise.reject(42),
+      });
 
       const result = await getCache({
         ttl: 60,
@@ -317,7 +311,7 @@ describe('Error Scenarios', () => {
           type: 'JSON',
         },
         key,
-        redis: mockRedis as unknown as typeof redis,
+        redis: mockRedis,
         args: {},
         query: async () => ({id: 1}),
       });
@@ -329,14 +323,10 @@ describe('Error Scenarios', () => {
     test('should convert object error to Error instance', async () => {
       const key = 'test:toError:object';
 
-      // Return an object error (not Error instance) to trigger toError conversion
-      const mockRedis = {
-        multi: () => ({
-          call: () => mockRedis.multi(),
-          exec: async () => [[{code: 'ERR', msg: 'failed'}, null]], // Plain object
-        }),
-        del: async () => 1,
-      };
+      // Reject with a plain object (not Error instance) to trigger toError conversion
+      const mockRedis = createFakeRedisApi({
+        jsonGet: () => Promise.reject({code: 'ERR', msg: 'failed'}),
+      });
 
       const result = await getCache({
         ttl: 60,
@@ -347,7 +337,7 @@ describe('Error Scenarios', () => {
           type: 'JSON',
         },
         key,
-        redis: mockRedis as unknown as typeof redis,
+        redis: mockRedis,
         args: {},
         query: async () => ({id: 1}),
       });
@@ -361,17 +351,14 @@ describe('Error Scenarios', () => {
 
 describe('Health Check Error Scenarios', () => {
   test('should return unhealthy status when Redis throws', async () => {
-    // Create a mock Redis that throws on ping
-    const mockRedis = {
+    // A client that throws on ping
+    const mockRedis = createFakeRedisApi({
       ping: async () => {
         throw new Error('Connection refused');
       },
-      info: async () => {
-        throw new Error('Connection refused');
-      },
-    };
+    });
 
-    const result = await checkHealth(mockRedis as unknown as Redis);
+    const result = await checkHealth(mockRedis);
 
     expect(result.status).toBe('unhealthy');
     expect(result.connected).toBe(false);
@@ -380,16 +367,13 @@ describe('Health Check Error Scenarios', () => {
   });
 
   test('should return unhealthy with string error', async () => {
-    const mockRedis = {
+    const mockRedis = createFakeRedisApi({
       ping: async () => {
         throw 'String error message';
       },
-      info: async () => {
-        throw 'String error message';
-      },
-    };
+    });
 
-    const result = await checkHealth(mockRedis as unknown as Redis);
+    const result = await checkHealth(mockRedis);
 
     expect(result.status).toBe('unhealthy');
     expect(result.connected).toBe(false);
@@ -514,24 +498,14 @@ describe('Maintenance Batch Operations', () => {
   });
 
   describe('Stream error handling', () => {
-    test('cleanupOrphanedKeys should reject on stream error', async () => {
-      // Create a mock Redis with a stream that emits an error
-      const mockStream = {
-        on: (event: string, callback: (...args: unknown[]) => void) => {
-          if (event === 'error') {
-            setTimeout(() => callback(new Error('Stream error')), 10);
-          }
-          return mockStream;
-        },
-      };
-
-      const mockRedis = {
-        scanStream: () => mockStream,
-      };
+    test('cleanupOrphanedKeys should reject on scan error', async () => {
+      const mockRedis = createFakeRedisApi({
+        scan: () => Promise.reject(new Error('Stream error')),
+      });
 
       await expect(
         cleanupOrphanedKeys({
-          redis: mockRedis as unknown as Redis,
+          redis: mockRedis,
           validModels: ['User'],
           prefix: 'prisma',
           delimiter: ':',
@@ -552,14 +526,10 @@ describe('Cache Read Error Scenarios', () => {
   test('should handle Redis exec returning error', async () => {
     const key = 'test:redis:error';
 
-    // Mock Redis that returns an error in exec result
-    const mockRedis = {
-      multi: () => ({
-        call: () => mockRedis.multi(),
-        exec: async () => [[new Error('Redis internal error'), null]],
-      }),
-      del: async () => 1,
-    };
+    // A client whose read rejects
+    const mockRedis = createFakeRedisApi({
+      jsonGet: () => Promise.reject(new Error('Redis internal error')),
+    });
 
     const onError = mock(() => {});
     const metricsCollector = createMetricsCollector();
@@ -575,7 +545,7 @@ describe('Cache Read Error Scenarios', () => {
         metricsCollector,
       },
       key,
-      redis: mockRedis as unknown as typeof redis,
+      redis: mockRedis,
       args: {},
       query: async () => ({id: 1, name: 'From DB'}),
     });
@@ -589,13 +559,9 @@ describe('Cache Read Error Scenarios', () => {
   test('should track cacheRead error in meta', async () => {
     const key = 'test:redis:error:meta';
 
-    const mockRedis = {
-      multi: () => ({
-        call: () => mockRedis.multi(),
-        exec: async () => [[new Error('Read failed'), null]],
-      }),
-      del: async () => 1,
-    };
+    const mockRedis = createFakeRedisApi({
+      jsonGet: () => Promise.reject(new Error('Read failed')),
+    });
 
     const result = await getCache({
       ttl: 60,
@@ -606,7 +572,7 @@ describe('Cache Read Error Scenarios', () => {
         type: 'JSON',
       },
       key,
-      redis: mockRedis as unknown as typeof redis,
+      redis: mockRedis,
       args: {},
       query: async () => ({recovered: true}),
     });
@@ -619,23 +585,11 @@ describe('Write Error After Deserialization Failure', () => {
   test('should handle write error after deserialization failure', async () => {
     const key = 'test:deser:then:write:error';
 
-    // Create mock that returns corrupted data on read, then fails on write
-    let callCount = 0;
-    const mockRedis = {
-      multi: () => ({
-        call: () => mockRedis.multi(),
-        exec: async () => {
-          callCount++;
-          if (callCount === 1) {
-            // First call (read) returns corrupted JSON string
-            return [[null, '{not valid json}}}']];
-          }
-          // Second call (write after deserialization failure) fails
-          return [[new Error('Write failed'), null]];
-        },
-      }),
-      del: async () => 1,
-    };
+    // Corrupted data on read, then a failing write
+    const mockRedis = createFakeRedisApi({
+      jsonGet: async () => '{not valid json}}}',
+      jsonSet: () => Promise.reject(new Error('Write failed')),
+    });
 
     const onError = mock(() => {});
     const metricsCollector = createMetricsCollector();
@@ -651,7 +605,7 @@ describe('Write Error After Deserialization Failure', () => {
         metricsCollector,
       },
       key,
-      redis: mockRedis as unknown as Redis,
+      redis: mockRedis,
       args: {},
       query: async () => ({id: 1}),
     });
@@ -666,17 +620,10 @@ describe('Write Error After Deserialization Failure', () => {
   test('should handle serialization error after deserialization failure', async () => {
     const key = 'test:deser:then:serialize:error';
 
-    // First, return corrupted data to trigger deserialization failure
-    const mockRedis = {
-      multi: () => ({
-        call: () => mockRedis.multi(),
-        exec: async () => {
-          // Return corrupted JSON that will fail to parse
-          return [[null, 'not json at all']];
-        },
-      }),
-      del: async () => 1,
-    };
+    // Corrupted data on read triggers the deserialization failure
+    const mockRedis = createFakeRedisApi({
+      jsonGet: async () => 'not json at all',
+    });
 
     const onError = mock(() => {});
     const metricsCollector = createMetricsCollector();
@@ -699,7 +646,7 @@ describe('Write Error After Deserialization Failure', () => {
         },
       },
       key,
-      redis: mockRedis as unknown as Redis,
+      redis: mockRedis,
       args: {},
       query: async () => ({id: 1}),
     });
@@ -763,23 +710,14 @@ describe('Invalid Cache Type in getCache', () => {
   });
 });
 
-describe('unlinkPatterns Stream Error', () => {
-  test('should reject when scanStream emits error', async () => {
-    const mockStream = {
-      on: (event: string, callback: (...args: unknown[]) => void) => {
-        if (event === 'error') {
-          setTimeout(() => callback(new Error('Scan stream error')), 10);
-        }
-        return mockStream;
-      },
-    };
-
-    const mockRedis = {
-      scanStream: () => mockStream,
-    };
+describe('unlinkPatterns Scan Error', () => {
+  test('should reject when scan fails', async () => {
+    const mockRedis = createFakeRedisApi({
+      scan: () => Promise.reject(new Error('Scan stream error')),
+    });
 
     const promises = unlinkPatterns({
-      redis: mockRedis as unknown as Redis,
+      redis: mockRedis,
       patterns: ['test:*'],
     });
 
@@ -787,77 +725,83 @@ describe('unlinkPatterns Stream Error', () => {
   });
 });
 
-describe('parseRedisTime Success Path', () => {
-  test('should use Redis TIME when valid response is returned', async () => {
-    const key = 'test:redis:time:valid';
+describe('ServerClock', () => {
+  test('uses the Redis server time once synced', async () => {
+    // Server clock fixed 100 seconds ahead of local time
+    const serverSeconds = Math.floor(Date.now() / 1000) + 100;
+    const api = createFakeRedisApi({time: async () => serverSeconds});
 
-    // Mock Redis that returns valid TIME result
-    // TIME returns [seconds, microseconds] as strings
-    const mockRedis = {
-      multi: () => ({
-        call: () => mockRedis.multi(),
-        exec: async () => [
-          [null, null], // GET result (cache miss)
-          [null, ['1704067200', '123456']], // TIME result: 2024-01-01 00:00:00 UTC
-        ],
-      }),
-      del: async () => 1,
-    };
+    const clock = createServerClock(api);
+    await clock.prime();
+
+    expect(Math.abs(clock.nowSeconds() - serverSeconds)).toBeLessThanOrEqual(2);
+  });
+
+  test('server-adjusted timestamps flow into cache meta', async () => {
+    const serverSeconds = Math.floor(Date.now() / 1000) + 100;
+    const api = createFakeRedisApi({time: async () => serverSeconds});
+    const clock = createServerClock(api);
+    await clock.prime();
 
     const result = await getCache({
       ttl: 60,
       stale: 30,
-      config: {
-        ttl: 60,
-        stale: 30,
-        type: 'JSON',
-      },
-      key,
-      redis: mockRedis as unknown as Redis,
+      config: {ttl: 60, stale: 30, type: 'JSON'},
+      key: 'test:redis:time:valid',
+      redis: api,
       args: {},
       query: async () => ({id: 1}),
+      clock,
     });
 
-    // Verify the timestamp was parsed from Redis TIME (1704067200 seconds)
-    // cachedAt should be the Redis server time, not Date.now()
-    expect(result.meta.cachedAt).toBe(1704067200);
-    expect(result.meta.expiresAt).toBe(1704067200 + 60);
-    expect(result.meta.staleUntil).toBe(1704067200 + 60 + 30);
+    expect(Math.abs(result.meta.cachedAt - serverSeconds)).toBeLessThanOrEqual(
+      2,
+    );
+    expect(result.meta.expiresAt).toBe(result.meta.cachedAt + 60);
+    expect(result.meta.staleUntil).toBe(result.meta.cachedAt + 60 + 30);
+  });
+
+  test('reports sync failures and falls back to the local clock', async () => {
+    const onSyncError = mock(() => {});
+    const api = createFakeRedisApi({
+      time: () => Promise.reject(new Error('TIME unavailable')),
+    });
+
+    const clock = createServerClock(api, onSyncError);
+    await clock.prime();
+
+    expect(onSyncError).toHaveBeenCalledTimes(1);
+    expect(
+      Math.abs(clock.nowSeconds() - Date.now() / 1000),
+    ).toBeLessThanOrEqual(2);
+  });
+
+  test('runs on the local clock when the client has no TIME support', async () => {
+    const api = createFakeRedisApi();
+    api.time = undefined;
+
+    const clock = createServerClock(api);
+    await clock.prime();
+
+    expect(
+      Math.abs(clock.nowSeconds() - Date.now() / 1000),
+    ).toBeLessThanOrEqual(2);
   });
 });
 
 describe('cleanupOrphanedKeys Delete Promise Rejection', () => {
-  test('should reject when unlink fails during end processing', async () => {
-    let endCallback: (() => void) | null = null;
-
-    const mockStream = {
-      on: (event: string, callback: (...args: unknown[]) => void) => {
-        if (event === 'data') {
-          // Emit orphaned keys
-          setTimeout(
-            () => callback(['prisma:orphaned:key1', 'prisma:orphaned:key2']),
-            5,
-          );
-        }
-        if (event === 'end') {
-          endCallback = callback as () => void;
-          // Trigger end after data
-          setTimeout(() => endCallback?.(), 20);
-        }
-        return mockStream;
-      },
-    };
-
-    const mockRedis = {
-      scanStream: () => mockStream,
-      unlink: async () => {
-        throw new Error('Unlink failed');
-      },
-    };
+  test('should reject when unlink fails', async () => {
+    const mockRedis = createFakeRedisApi({
+      scan: async () => ({
+        cursor: '0',
+        keys: ['prisma:orphaned:key1', 'prisma:orphaned:key2'],
+      }),
+      unlink: () => Promise.reject(new Error('Unlink failed')),
+    });
 
     await expect(
       cleanupOrphanedKeys({
-        redis: mockRedis as unknown as Redis,
+        redis: mockRedis,
         validModels: ['User'],
         prefix: 'prisma',
         delimiter: ':',

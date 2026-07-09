@@ -1,4 +1,3 @@
-import type {Redis} from 'iovalkey';
 import {
   DEFAULT_CHUNK_SIZE,
   DEFAULT_DELIMITER,
@@ -6,13 +5,14 @@ import {
   DEFAULT_SCAN_COUNT,
   ESTIMATED_VALUE_SIZE_BYTES,
 } from './constants';
+import {type RedisClientInput, resolveRedisApi} from './redisApi';
 
 /**
  * Options for the orphaned key cleanup operation.
  */
 export interface CleanupOptions {
-  /** Redis client instance */
-  redis: Redis;
+  /** Redis client, instance, or RedisApi implementation */
+  redis: RedisClientInput;
   /** Cache key prefix (default: 'prisma') */
   prefix?: string;
   /** List of valid model names currently in the schema */
@@ -76,6 +76,7 @@ export const cleanupOrphanedKeys = async ({
   batchSize = DEFAULT_CHUNK_SIZE,
   onProgress,
 }: CleanupOptions): Promise<CleanupResult> => {
+  const {api} = resolveRedisApi(redis);
   const startTime = Date.now();
   const pattern = `${prefix}${delimiter}*`;
   const orphanedKeys: string[] = [];
@@ -86,64 +87,53 @@ export const cleanupOrphanedKeys = async ({
     validModels.map(model => `${prefix}${delimiter}${model.toLowerCase()}`),
   );
 
-  return new Promise((resolve, reject) => {
-    const stream = redis.scanStream({match: pattern, count: batchSize});
-    const deleteBuffer: string[] = [];
-    const deletePromises: Promise<number>[] = [];
+  const deleteBuffer: string[] = [];
+  const deletePromises: Promise<number>[] = [];
 
-    stream.on('data', (keys: string[]) => {
-      scannedKeys += keys.length;
+  let cursor = '0';
+  do {
+    const page = await api.scan(cursor, pattern, batchSize);
+    cursor = page.cursor;
+    scannedKeys += page.keys.length;
 
-      for (const key of keys) {
-        // Extract model part: "prisma:user:findUnique:..." -> "prisma:user"
-        const parts = key.split(delimiter);
-        const modelPart = parts.slice(0, 2).join(delimiter).toLowerCase();
+    for (const key of page.keys) {
+      // Extract model part: "prisma:user:findUnique:..." -> "prisma:user"
+      const parts = key.split(delimiter);
+      const modelPart = parts.slice(0, 2).join(delimiter).toLowerCase();
 
-        if (!validModelPatterns.has(modelPart)) {
-          orphanedKeys.push(key);
-          if (!dryRun) {
-            deleteBuffer.push(key);
-          }
+      if (!validModelPatterns.has(modelPart)) {
+        orphanedKeys.push(key);
+        if (!dryRun) {
+          deleteBuffer.push(key);
         }
       }
+    }
 
-      // Batch delete when buffer is full
-      if (!dryRun && deleteBuffer.length >= batchSize) {
-        const toDelete = deleteBuffer.splice(0, batchSize);
-        deletePromises.push(redis.unlink(...toDelete));
-      }
+    // Batch delete when buffer is full
+    while (!dryRun && deleteBuffer.length >= batchSize) {
+      deletePromises.push(api.unlink(deleteBuffer.splice(0, batchSize)));
+    }
 
-      if (onProgress) {
-        onProgress(scannedKeys, orphanedKeys.length);
-      }
-    });
+    if (onProgress) {
+      onProgress(scannedKeys, orphanedKeys.length);
+    }
+  } while (cursor !== '0');
 
-    stream.on('error', error => {
-      reject(error);
-    });
+  // Delete remaining keys in buffer
+  if (!dryRun && deleteBuffer.length > 0) {
+    deletePromises.push(api.unlink(deleteBuffer));
+  }
 
-    stream.on('end', async () => {
-      try {
-        // Delete remaining keys in buffer
-        if (!dryRun && deleteBuffer.length > 0) {
-          deletePromises.push(redis.unlink(...deleteBuffer));
-        }
+  // UNLINK reports how many keys it actually removed, which can be
+  // fewer than staged if keys expired or were deleted concurrently
+  const deleteCounts = await Promise.all(deletePromises);
 
-        // UNLINK reports how many keys it actually removed, which can be
-        // fewer than staged if keys expired or were deleted concurrently
-        const deleteCounts = await Promise.all(deletePromises);
-
-        resolve({
-          scannedKeys,
-          orphanedKeys,
-          deletedCount: deleteCounts.reduce((sum, count) => sum + count, 0),
-          durationMs: Date.now() - startTime,
-        });
-      } catch (error) {
-        reject(error);
-      }
-    });
-  });
+  return {
+    scannedKeys,
+    orphanedKeys,
+    deletedCount: deleteCounts.reduce((sum, count) => sum + count, 0),
+    durationMs: Date.now() - startTime,
+  };
 };
 
 /**
@@ -171,48 +161,41 @@ export interface CacheStats {
  * ```
  */
 export const getCacheStats = async (
-  redis: Redis,
+  redis: RedisClientInput,
   prefix = DEFAULT_PREFIX,
   delimiter = DEFAULT_DELIMITER,
 ): Promise<CacheStats> => {
+  const {api} = resolveRedisApi(redis);
   const pattern = `${prefix}${delimiter}*`;
   const keysByModel: Record<string, number> = {};
   let totalKeys = 0;
   let estimatedSizeBytes = 0;
 
-  return new Promise((resolve, reject) => {
-    const stream = redis.scanStream({
-      match: pattern,
-      count: DEFAULT_SCAN_COUNT,
-    });
+  let cursor = '0';
+  do {
+    const page = await api.scan(cursor, pattern, DEFAULT_SCAN_COUNT);
+    cursor = page.cursor;
+    totalKeys += page.keys.length;
 
-    stream.on('data', (keys: string[]) => {
-      totalKeys += keys.length;
+    for (const key of page.keys) {
+      const parts = key.split(delimiter);
+      const model = parts[1] || 'unknown';
+      keysByModel[model] = (keysByModel[model] || 0) + 1;
 
-      for (const key of keys) {
-        const parts = key.split(delimiter);
-        const model = parts[1] || 'unknown';
-        keysByModel[model] = (keysByModel[model] || 0) + 1;
+      // Rough estimate: key length + average value size
+      estimatedSizeBytes += key.length + ESTIMATED_VALUE_SIZE_BYTES;
+    }
+  } while (cursor !== '0');
 
-        // Rough estimate: key length + average value size
-        estimatedSizeBytes += key.length + ESTIMATED_VALUE_SIZE_BYTES;
-      }
-    });
-
-    stream.on('error', reject);
-
-    stream.on('end', () => {
-      resolve({totalKeys, keysByModel, estimatedSizeBytes});
-    });
-  });
+  return {totalKeys, keysByModel, estimatedSizeBytes};
 };
 
 /**
  * Options for flushing cache by model.
  */
 export interface FlushModelOptions {
-  /** Redis client instance */
-  redis: Redis;
+  /** Redis client, instance, or RedisApi implementation */
+  redis: RedisClientInput;
   /** Model name to flush */
   model: string;
   /** Cache key prefix (default: 'prisma') */
@@ -251,42 +234,34 @@ export const flushModelCache = async ({
     );
   }
 
+  const {api} = resolveRedisApi(redis);
   const startTime = Date.now();
   const pattern = `${prefix}${delimiter}${model.toLowerCase()}${delimiter}*`;
 
-  return new Promise((resolve, reject) => {
-    const stream = redis.scanStream({match: pattern, count: batchSize});
-    const buffer: string[] = [];
-    const deletePromises: Promise<number>[] = [];
+  const buffer: string[] = [];
+  const deletePromises: Promise<number>[] = [];
 
-    stream.on('data', (keys: string[]) => {
-      buffer.push(...keys);
+  let cursor = '0';
+  do {
+    const page = await api.scan(cursor, pattern, batchSize);
+    cursor = page.cursor;
+    buffer.push(...page.keys);
 
-      while (buffer.length >= batchSize) {
-        const toDelete = buffer.splice(0, batchSize);
-        deletePromises.push(redis.unlink(...toDelete));
-      }
-    });
+    while (buffer.length >= batchSize) {
+      deletePromises.push(api.unlink(buffer.splice(0, batchSize)));
+    }
+  } while (cursor !== '0');
 
-    stream.on('error', reject);
+  if (buffer.length > 0) {
+    deletePromises.push(api.unlink(buffer));
+  }
 
-    stream.on('end', async () => {
-      try {
-        if (buffer.length > 0) {
-          deletePromises.push(redis.unlink(...buffer));
-        }
+  // UNLINK reports how many keys it actually removed, which can be
+  // fewer than staged if keys expired or were deleted concurrently
+  const deleteCounts = await Promise.all(deletePromises);
 
-        // UNLINK reports how many keys it actually removed, which can be
-        // fewer than staged if keys expired or were deleted concurrently
-        const deleteCounts = await Promise.all(deletePromises);
-
-        resolve({
-          deletedCount: deleteCounts.reduce((sum, count) => sum + count, 0),
-          durationMs: Date.now() - startTime,
-        });
-      } catch (error) {
-        reject(error);
-      }
-    });
-  });
+  return {
+    deletedCount: deleteCounts.reduce((sum, count) => sum + count, 0),
+    durationMs: Date.now() - startTime,
+  };
 };
