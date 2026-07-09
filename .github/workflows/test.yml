@@ -16,8 +16,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 3
-        volumes:
-          - dragonfly:/data
       postgres:
         image: postgres:alpine
         ports:
@@ -31,8 +29,6 @@ jobs:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
           POSTGRES_DB: testdb
-        volumes:
-          - postgres:/var/lib/postgresql/data
 
     steps:
       - name: Checkout Repository
