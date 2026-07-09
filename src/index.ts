@@ -51,6 +51,10 @@ export type {
   CacheConfig,
   CacheErrors,
   CacheOptions,
+  CacheSource,
+  Meta,
+  NonCachedMetaResult,
+  ResultWithMeta,
   UncacheOptions,
 } from './types';
 export {ValidationError} from './validation';
