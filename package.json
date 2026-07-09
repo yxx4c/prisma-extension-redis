@@ -68,8 +68,8 @@
     "test": "bun test",
     "check": "biome check",
     "check:write": "biome check --write",
-    "prisma:migrate": "bunx prisma migrate dev --schema ./test/prisma/schema.prisma",
-    "prisma:generate": "bunx prisma generate --schema ./test/prisma/schema.prisma",
+    "prisma:migrate": "bunx prisma migrate dev --config ./test/prisma/prisma.config.ts",
+    "prisma:generate": "bunx prisma generate --config ./test/prisma/prisma.config.ts",
     "pretest": "bun run prisma:migrate && bun run prisma:generate",
     "posttest": "bun run check",
     "release": "semantic-release"
