@@ -1,5 +1,7 @@
 export type {Redis, RedisOptions} from 'iovalkey';
 export {getKeyGen, getKeyPatternGen} from './cacheKey';
+export {coalesce} from './coalesce';
+export {stableHash} from './hash';
 export {
   filterOperations,
   getCache,

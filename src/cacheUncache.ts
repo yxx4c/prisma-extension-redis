@@ -1,6 +1,6 @@
 import type {JsArgs, Operation} from '@prisma/client/runtime/client';
-import {coalesceAsync} from 'promise-coalesce';
 import type {getAutoKeyGen} from './cacheKey';
+import {coalesce} from './coalesce';
 import {DEFAULT_CHUNK_SIZE, DEFAULT_MAX_CONCURRENT_BATCHES} from './constants';
 import {createDebugLogger, noopLogger} from './debug';
 import {
@@ -427,7 +427,7 @@ export const promiseCoalesceGetCache = ({
   key,
   ...rest
 }: GetDataParams): Promise<InternalCacheResult> =>
-  coalesceAsync(key, async () => getCache({key, ...rest}));
+  coalesce(key, () => getCache({key, ...rest}));
 
 /**
  * Handles auto-caching for Prisma operations based on configuration.

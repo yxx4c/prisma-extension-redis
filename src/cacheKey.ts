@@ -1,5 +1,5 @@
-import {hash} from 'object-code';
 import {DEFAULT_DELIMITER, DEFAULT_PREFIX} from './constants';
+import {stableHash} from './hash';
 import type {
   CacheAutoKeyParams,
   CacheKeyParams,
@@ -9,34 +9,6 @@ import type {
 const globCheckRegex = /[*?]/;
 
 const globCheck = (s: string) => globCheckRegex.test(s);
-
-/**
- * Recursively sorts object keys to ensure consistent hashing
- * regardless of key insertion order.
- */
-const sortObjectKeys = (obj: unknown): unknown => {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map(sortObjectKeys);
-  }
-
-  if (obj instanceof Date) {
-    return obj;
-  }
-
-  return Object.keys(obj as Record<string, unknown>)
-    .sort()
-    .reduce(
-      (sorted, key) => {
-        sorted[key] = sortObjectKeys((obj as Record<string, unknown>)[key]);
-        return sorted;
-      },
-      {} as Record<string, unknown>,
-    );
-};
 
 /**
  * Creates a function that generates cache keys from query parameters.
@@ -106,10 +78,9 @@ export const getKeyGen =
 export const getAutoKeyGen =
   (getKey: (input: CacheKeyParams) => string) =>
   ({args, model, operation}: CacheAutoKeyParams) => {
-    // Normalize args to ensure consistent hashing regardless of key order
-    const normalizedArgs = sortObjectKeys({...args, cache: undefined});
+    // stableHash is key-order independent, so no normalization pass needed
     return getKey({
-      params: [{key: hash(normalizedArgs).toString()}],
+      params: [{key: stableHash({...args, cache: undefined})}],
       model,
       operation,
     });

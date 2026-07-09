@@ -107,8 +107,6 @@
     "@prisma/client": "^7.2.0"
   },
   "dependencies": {
-    "iovalkey": "^0.3.3",
-    "object-code": "^2.0.0",
-    "promise-coalesce": "^1.5.0"
+    "iovalkey": "^0.3.3"
   }
 }
