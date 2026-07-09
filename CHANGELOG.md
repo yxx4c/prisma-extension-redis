@@ -1,3 +1,11 @@
+# [4.1.0](https://github.com/yxx4c/prisma-extension-redis/compare/v4.0.1...v4.1.0) (2026-07-09)
+
+
+### Features
+
+* add direct cache population ([a31f4dc](https://github.com/yxx4c/prisma-extension-redis/commit/a31f4dc9b38333e2b82bd5ebc1565e2842b7a41a))
+* add direct uncache and split exact keys from patterns during invalidation ([e916d18](https://github.com/yxx4c/prisma-extension-redis/commit/e916d1832240e4cd6842274ca7affb38e3ab73f5)), closes [#56](https://github.com/yxx4c/prisma-extension-redis/issues/56)
+
 ## [4.0.1](https://github.com/yxx4c/prisma-extension-redis/compare/v4.0.0...v4.0.1) (2026-07-09)
 
 
