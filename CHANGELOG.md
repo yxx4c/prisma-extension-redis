@@ -1,3 +1,10 @@
+## [4.0.1](https://github.com/yxx4c/prisma-extension-redis/compare/v4.0.0...v4.0.1) (2026-07-09)
+
+
+### Bug Fixes
+
+* republish as 4.0.1 ([8241a08](https://github.com/yxx4c/prisma-extension-redis/commit/8241a085081b439e7bb482824bd3c4225cbf0509))
+
 # [4.0.0](https://github.com/yxx4c/prisma-extension-redis/compare/v3.4.1...v4.0.0) (2026-07-09)
 
 
