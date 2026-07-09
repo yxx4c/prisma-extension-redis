@@ -60,6 +60,13 @@ describe('stableHash', () => {
     );
   });
 
+  test('hashes functions and symbols by their string form', () => {
+    const fn = () => 1;
+    expect(stableHash({cb: fn})).toBe(stableHash({cb: fn}));
+    expect(stableHash({cb: fn})).not.toBe(stableHash({cb: String(fn)}));
+    expect(stableHash(Symbol('a'))).toBe(stableHash(Symbol('a')));
+  });
+
   test('produces compact key-safe output', () => {
     const out = stableHash({where: {id: 1}});
     expect(out).toMatch(/^[0-9a-z]+$/);
