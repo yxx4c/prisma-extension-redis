@@ -1,3 +1,38 @@
+# [4.0.0](https://github.com/yxx4c/prisma-extension-redis/compare/v3.4.1...v4.0.0) (2026-07-09)
+
+
+### Bug Fixes
+
+* add comprehensive tests and fix critical issues ([fe7cc12](https://github.com/yxx4c/prisma-extension-redis/commit/fe7cc122022b97932acbc1e4409e8edb6aa0cc56))
+* correct deletion counts, non-cached recache, and warmer error contract ([31f1299](https://github.com/yxx4c/prisma-extension-redis/commit/31f12994e6a270b83755cacc0493233c86b337f1))
+* **deps:** make @prisma/client a peer dependency and stop shipping test-only deps ([8fe288c](https://github.com/yxx4c/prisma-extension-redis/commit/8fe288c11529077f62ce03cdf495479e35bd6d0c))
+* resolve critical caching issues ([49a0d5e](https://github.com/yxx4c/prisma-extension-redis/commit/49a0d5e8f7dd92a7543e2f4de1cb6f7211760257))
+* **test:** point prisma CLI at prisma.config.ts so pretest works from repo root ([831161a](https://github.com/yxx4c/prisma-extension-redis/commit/831161ab8648ebe93928adccb0bd3bd694716e51))
+* use Redis TIME for consistent timestamps and improve error handling ([eeff9c5](https://github.com/yxx4c/prisma-extension-redis/commit/eeff9c551eadab82e5277b79c520791b026e3012))
+
+
+### Features
+
+* add cache key stability, metrics collection, health check, and cache warming ([76943fa](https://github.com/yxx4c/prisma-extension-redis/commit/76943fa4a128478b39ea4d116f1314199f09ec38))
+* add input validation, error tracking, and cache maintenance utilities ([c7c55d8](https://github.com/yxx4c/prisma-extension-redis/commit/c7c55d87126d9f49160df43a3483caefd051c86b))
+* make the extension Redis-client agnostic via a RedisApi interface ([abd6f86](https://github.com/yxx4c/prisma-extension-redis/commit/abd6f86def4c16ddfdbebe7aa867f825387a44c3))
+* migrate to Prisma 7 with driver adapters ([535d4e1](https://github.com/yxx4c/prisma-extension-redis/commit/535d4e1fc0d48f4372c3bd7d521c0ecbd3da7200))
+* replace object-code and promise-coalesce with faster inline implementations ([90c0383](https://github.com/yxx4c/prisma-extension-redis/commit/90c0383e0a8c41cca1bcf340343bc4fcee704518))
+* **types:** export meta-related types from the package entry point ([1764357](https://github.com/yxx4c/prisma-extension-redis/commit/17643577d21d02d098afaa3254a4392127f2168e))
+
+
+### BREAKING CHANGES
+
+* utility functions (getCache, unlinkPatterns,
+cleanupOrphanedKeys, flushModelCache, getCacheStats, checkHealth)
+accept any supported client input and resolve it internally; the
+internal RedisCacheCommands/RedisCacheResultOrError types were removed.
+Unrecognized client objects now throw at initialization.
+* **deps:** @prisma/client is now a peerDependency. Install it
+alongside prisma-extension-redis (any 7.x, >=7.2.0). @prisma/adapter-pg
+is no longer installed transitively; depend on your own driver adapter.
+* Requires Prisma 7 driver adapter pattern
+
 ## [3.4.1](https://github.com/yxx4c/prisma-extension-redis/compare/v3.4.0...v3.4.1) (2025-10-06)
 
 
