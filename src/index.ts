@@ -4,6 +4,7 @@ export {
   filterOperations,
   getCache,
   promiseCoalesceGetCache,
+  uncache,
   unlinkPatterns,
 } from './cacheUncache';
 export type {WarmOptions, WarmQuery, WarmResult} from './cacheWarmer';
@@ -71,5 +72,6 @@ export type {
   NonCachedMetaResult,
   ResultWithMeta,
   UncacheOptions,
+  UncacheParams,
 } from './types';
 export {ValidationError} from './validation';

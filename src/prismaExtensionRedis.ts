@@ -8,6 +8,7 @@ import {
   isAutoCacheEnabled,
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
+  uncache,
 } from './cacheUncache';
 import type {WarmOptions, WarmQuery} from './cacheWarmer';
 import {createCacheWarmer} from './cacheWarmer';
@@ -25,6 +26,7 @@ import type {
   ExtendedModel,
   NonCachedMetaResult,
   PrismaExtensionRedisOptions,
+  UncacheParams,
 } from './types';
 import {validateConfig} from './validation';
 
@@ -167,6 +169,34 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
           prefix: configuredPrefix,
           delimiter: configuredDelimiter,
           ...opts,
+        }),
+
+      /**
+       * Delete cache entries directly, without a database operation.
+       * Exact keys are removed immediately; when hasPattern is true,
+       * keys containing glob characters (* or ?) are expanded with SCAN
+       * while the remaining exact keys are still removed directly.
+       * @param options - Keys or patterns to remove
+       * @returns The number of cache entries deleted
+       * @example
+       * ```typescript
+       * const {deleted} = await prisma.uncache({
+       *   uncacheKeys: ['prisma:user:id:1', 'prisma:post:*'],
+       *   hasPattern: true,
+       * });
+       * ```
+       */
+      uncache: (
+        options: Omit<
+          UncacheParams,
+          'redis' | 'chunkSize' | 'maxConcurrentBatches'
+        >,
+      ) =>
+        uncache({
+          redis: api,
+          chunkSize: config.chunkSize,
+          maxConcurrentBatches: config.maxConcurrentBatches,
+          ...options,
         }),
 
       /**

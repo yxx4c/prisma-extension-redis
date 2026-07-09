@@ -1,5 +1,6 @@
 import type {JsArgs, Operation} from '@prisma/client/runtime/client';
 import type {getAutoKeyGen} from './cacheKey';
+import {globCheck} from './cacheKey';
 import {coalesce} from './coalesce';
 import {DEFAULT_CHUNK_SIZE, DEFAULT_MAX_CONCURRENT_BATCHES} from './constants';
 import {createDebugLogger, noopLogger} from './debug';
@@ -20,6 +21,7 @@ import {
   type InternalCacheResult,
   UNCACHE_OPERATIONS,
   type UncacheOptions,
+  type UncacheParams,
 } from './types';
 import {validateCacheOptions} from './validation';
 
@@ -39,7 +41,8 @@ export const filterOperations =
  * Uses batching to handle large numbers of keys efficiently.
  *
  * @param params - The deletion parameters
- * @returns Array of promises that resolve when deletion is complete
+ * @returns Array of promises that resolve, per pattern, with the number
+ * of keys deleted
  */
 export const unlinkPatterns = ({
   patterns,
@@ -51,10 +54,13 @@ export const unlinkPatterns = ({
 
   return patterns.map(async pattern => {
     const buffer: string[] = [];
+    const allBatches: Promise<number>[] = [];
     const activeBatches: Promise<number>[] = [];
 
     const execBatch = (keys: string[]): Promise<unknown> => {
-      activeBatches.push(api.unlink(keys));
+      const batch = api.unlink(keys);
+      allBatches.push(batch);
+      activeBatches.push(batch);
       return activeBatches.length >= maxConcurrentBatches
         ? (activeBatches.shift() as Promise<number>)
         : Promise.resolve();
@@ -71,9 +77,40 @@ export const unlinkPatterns = ({
     } while (cursor !== '0');
 
     if (buffer.length) await execBatch(buffer.splice(0, buffer.length));
-    await Promise.all(activeBatches);
-    return true;
+    const counts = await Promise.all(allBatches);
+    return counts.reduce((sum, count) => sum + count, 0);
   });
+};
+
+/**
+ * Deletes cache entries directly, without an accompanying database
+ * operation. Exact keys are removed with UNLINK; when hasPattern is
+ * true, keys containing glob characters (* or ?) are expanded with
+ * SCAN while the remaining exact keys are still removed directly.
+ *
+ * @param params - The deletion parameters
+ * @returns Promise resolving with the number of cache entries deleted
+ */
+export const uncache = async ({
+  redis,
+  uncacheKeys,
+  hasPattern = false,
+  chunkSize,
+  maxConcurrentBatches,
+}: UncacheParams): Promise<{deleted: number}> => {
+  const {api} = resolveRedisApi(redis);
+
+  const patterns = hasPattern ? uncacheKeys.filter(globCheck) : [];
+  const exactKeys = hasPattern
+    ? uncacheKeys.filter(key => !globCheck(key))
+    : uncacheKeys;
+
+  const counts = await Promise.all([
+    exactKeys.length ? api.unlink(exactKeys) : Promise.resolve(0),
+    ...unlinkPatterns({redis: api, patterns, chunkSize, maxConcurrentBatches}),
+  ]);
+
+  return {deleted: counts.reduce((sum, count) => sum + count, 0)};
 };
 
 type CacheCommandSet = {
@@ -432,24 +469,14 @@ export const customUncacheAction = async ({
   config,
 }: ActionParams) => {
   const {uncacheKeys, hasPattern} = args.uncache as unknown as UncacheOptions;
-  const {api} = resolveRedisApi(redis);
 
-  if (hasPattern) {
-    // Check if any key contains wildcard characters (* or ?)
-    const hasWildcards = uncacheKeys.some(
-      key => key.includes('*') || key.includes('?'),
-    );
-
-    if (hasWildcards) {
-      // Use Redis SCAN with MATCH for pattern-based deletion
-      const unlinkPromises = unlinkPatterns({
-        redis,
-        patterns: uncacheKeys,
-        chunkSize: config.chunkSize,
-      });
-      await Promise.all(unlinkPromises);
-    } else await api.del(uncacheKeys);
-  } else await api.del(uncacheKeys);
+  await uncache({
+    redis,
+    uncacheKeys,
+    hasPattern,
+    chunkSize: config.chunkSize,
+    maxConcurrentBatches: config.maxConcurrentBatches,
+  });
 
   // Uncache operations should always return the plain Prisma result
   return await query({...args, uncache: undefined, meta: undefined});

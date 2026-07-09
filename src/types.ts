@@ -553,6 +553,35 @@ export type DeletePatterns = {
   maxConcurrentBatches?: number;
 };
 
+export type UncacheParams = {
+  /**
+   * Redis client, instance or RedisApi (see PrismaExtensionRedisOptions.client)
+   */
+  redis: RedisClientInput;
+
+  /**
+   * Keys to delete; entries containing glob characters (* or ?) are
+   * treated as SCAN patterns when hasPattern is true
+   */
+  uncacheKeys: string[];
+
+  /**
+   * Enable glob expansion for keys containing wildcard characters.
+   * Exact keys in the list are still deleted directly without a SCAN
+   */
+  hasPattern?: boolean;
+
+  /**
+   * Chunk size for batch operations
+   */
+  chunkSize?: number;
+
+  /**
+   * Maximum number of concurrent batches
+   */
+  maxConcurrentBatches?: number;
+};
+
 export type ActionParams = {
   /**
    * Model query options

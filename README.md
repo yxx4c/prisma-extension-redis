@@ -269,6 +269,22 @@ extendedPrisma.user.update({
 - **`uncacheKeys`**: Specifies the keys or patterns to be invalidated.
 - **`hasPattern`**: Indicates if wildcard patterns are used for key matching.
 
+### Direct Cache Invalidation
+
+Cache entries can also be deleted directly with the `uncache` client method, without performing a database operation:
+
+```javascript
+const { deleted } = await extendedPrisma.uncache({
+  uncacheKeys: [
+    extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] }),
+    extendedPrisma.getKeyPattern({ params: [{ prisma: 'Post' }, { glob: '*' }] }),
+  ],
+  hasPattern: true,
+});
+```
+
+Exact keys are removed immediately with `UNLINK`; keys containing glob characters (`*` or `?`) are expanded with `SCAN` when `hasPattern` is true. The same function is available as a standalone import for use outside the extension: `import { uncache } from 'prisma-extension-redis'`.
+
 ---
 
 ## Key Concepts Explained

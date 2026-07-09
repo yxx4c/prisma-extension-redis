@@ -116,6 +116,29 @@ describe('Custom RedisApi adapter (client-agnostic end-to-end)', () => {
     ).toHaveLength(0);
   });
 
+  test('prisma.uncache removes entries directly without a database operation', async () => {
+    const exactKey = prisma.getKey({
+      params: [{prisma: 'User'}, {direct: '1'}],
+    });
+    await prisma.user.findUnique({
+      where: {email: userOne.email},
+      cache: {key: exactKey, ttl: 60},
+    });
+    await prisma.user.findUnique({where: {email: userOne.email}});
+    expect(fakeRedis.store.has(exactKey)).toBe(true);
+
+    const {deleted} = await prisma.uncache({
+      uncacheKeys: [exactKey, 'adapter_e2e:user*'],
+      hasPattern: true,
+    });
+
+    expect(deleted).toBeGreaterThanOrEqual(2);
+    expect(fakeRedis.store.has(exactKey)).toBe(false);
+    expect(
+      [...fakeRedis.store.keys()].filter(key => key.startsWith('adapter_e2e')),
+    ).toHaveLength(0);
+  });
+
   test('maintenance utilities run against the custom client', async () => {
     await prisma.user.findUnique({where: {email: userOne.email}});
 
