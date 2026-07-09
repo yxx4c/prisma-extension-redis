@@ -1,21 +1,22 @@
 {
   "name": "cache-uncache-example",
   "version": "1.0.0",
+  "scripts": {
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "start": "bun index.ts"
+  },
   "devDependencies": {
-    "@libsql/client": "^0.15.15",
-    "@types/node": "^24.6.0",
-    "drizzle-kit": "^0.31.5",
-    "typescript": "^5.9.2"
+    "@types/node": "^25.9.5",
+    "prisma": "^7.8.0",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@prisma/client": "6.16.3",
-    "dotenv": "^17.2.3",
-    "drizzle-orm": "^0.44.5",
+    "@prisma/adapter-libsql": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "dotenv": "^17.4.2",
     "iovalkey": "^0.3.3",
-    "pino": "^9.12.0",
-    "prisma": "6.16.3",
-    "prisma-extension-redis": "^3.2.0",
-    "superjson": "^2.2.2",
+    "prisma-extension-redis": "^4.0.0",
     "valibot": "^1.1.0"
   }
 }

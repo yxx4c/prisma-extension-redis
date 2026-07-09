@@ -1,9 +1,10 @@
-import {PrismaClient} from '@prisma/client';
+import {PrismaLibSql} from '@prisma/adapter-libsql';
 import {
   type AutoCacheConfig,
   type CacheConfig,
   PrismaExtensionRedis,
 } from 'prisma-extension-redis';
+import {PrismaClient} from './prisma/generated/prisma/client';
 
 import {users} from './data';
 import env from './env';
@@ -49,7 +50,10 @@ const config: CacheConfig = {
   // },
 };
 
-const prisma = new PrismaClient();
+// Prisma 7 uses driver adapters for database access
+const adapter = new PrismaLibSql({url: 'file:prisma/sqlite.db'});
+
+const prisma = new PrismaClient({adapter});
 const extendedPrisma = prisma.$extends(PrismaExtensionRedis({config, client}));
 
 const resultSourceString = (isCached: boolean) =>
