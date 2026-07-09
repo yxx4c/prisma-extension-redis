@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: test utility functions need flexible typing */
-import type {Prisma} from '@prisma/client';
+import type {Prisma} from './prisma/generated/prisma/client';
 
 interface User {
   id: number;

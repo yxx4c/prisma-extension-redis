@@ -1,6 +1,9 @@
-import type {JsArgs, Operation} from '@prisma/client/runtime/library';
-import {coalesceAsync} from 'promise-coalesce';
+import type {JsArgs, Operation} from '@prisma/client/runtime/client';
 import type {getAutoKeyGen} from './cacheKey';
+import {coalesce} from './coalesce';
+import {DEFAULT_CHUNK_SIZE, DEFAULT_MAX_CONCURRENT_BATCHES} from './constants';
+import {createDebugLogger, noopLogger} from './debug';
+import {getServerClock, type RedisApi, resolveRedisApi} from './redisApi';
 import {
   type ActionCheckParams,
   type ActionParams,
@@ -8,84 +11,108 @@ import {
   type autoOperations,
   CACHE_OPERATIONS,
   type CacheContext,
+  type CacheErrors,
   type CacheOptions,
+  type CacheSource,
+  type CacheType,
   type DeletePatterns,
   type GetDataParams,
-  type RedisCacheCommands,
+  type InternalCacheResult,
   UNCACHE_OPERATIONS,
   type UncacheOptions,
 } from './types';
+import {validateCacheOptions} from './validation';
+
+/**
+ * Tracks in-flight background refresh operations to prevent duplicate
+ * database queries when multiple concurrent requests hit stale cache.
+ */
+const backgroundRefreshes = new Map<string, Promise<void>>();
 
 export const filterOperations =
   <T extends Operation[]>(...ops: T) =>
   (excluded?: Operation[]): T =>
     excluded ? (ops.filter(op => !excluded.includes(op)) as T) : ops;
 
+/**
+ * Deletes Redis keys matching the given patterns using SCAN and UNLINK.
+ * Uses batching to handle large numbers of keys efficiently.
+ *
+ * @param params - The deletion parameters
+ * @returns Array of promises that resolve when deletion is complete
+ */
 export const unlinkPatterns = ({
   patterns,
   redis,
-  chunkSize = 1000,
-  maxConcurrentBatches = 5,
-}: DeletePatterns) =>
-  patterns.map(
-    pattern =>
-      new Promise<boolean>(resolve => {
-        const stream = redis.scanStream({match: pattern});
-        const buffer: string[] = [];
-        const activeBatches: Promise<
-          [error: Error | null, result: unknown][] | null
-        >[] = [];
+  chunkSize = DEFAULT_CHUNK_SIZE,
+  maxConcurrentBatches = DEFAULT_MAX_CONCURRENT_BATCHES,
+}: DeletePatterns) => {
+  const {api} = resolveRedisApi(redis);
 
-        const execBatch = (keys: string[]) => {
-          activeBatches.push(
-            redis
-              .pipeline()
-              .unlink(...keys)
-              .exec(),
-          );
-          return activeBatches.length >= maxConcurrentBatches
-            ? activeBatches.shift()
-            : Promise.resolve();
-        };
+  return patterns.map(async pattern => {
+    const buffer: string[] = [];
+    const activeBatches: Promise<number>[] = [];
 
-        stream.on('data', (keys: string[]) => {
-          buffer.push(...keys);
-          while (buffer.length >= chunkSize)
-            execBatch(buffer.splice(0, chunkSize));
-        });
+    const execBatch = (keys: string[]): Promise<unknown> => {
+      activeBatches.push(api.unlink(keys));
+      return activeBatches.length >= maxConcurrentBatches
+        ? (activeBatches.shift() as Promise<number>)
+        : Promise.resolve();
+    };
 
-        stream.on('end', () => {
-          if (buffer.length) execBatch(buffer.splice(0, buffer.length));
-          Promise.all(activeBatches).then(() => resolve(true));
-        });
-      }),
-  );
+    let cursor = '0';
+    do {
+      const page = await api.scan(cursor, pattern, chunkSize);
+      cursor = page.cursor;
+      buffer.push(...page.keys);
+      while (buffer.length >= chunkSize) {
+        await execBatch(buffer.splice(0, chunkSize));
+      }
+    } while (cursor !== '0');
 
-const commands: RedisCacheCommands = {
+    if (buffer.length) await execBatch(buffer.splice(0, buffer.length));
+    await Promise.all(activeBatches);
+    return true;
+  });
+};
+
+type CacheCommandSet = {
+  get: (api: RedisApi, key: string) => Promise<string | null>;
+  set: (
+    api: RedisApi,
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ) => Promise<unknown>;
+};
+
+const commands: Record<CacheType, CacheCommandSet> = {
   JSON: {
-    get: (redis, key) => redis.multi().call('JSON.GET', key).exec(),
-
-    set: (redis, key, value, ttl) => {
-      const multi = redis.multi().call('JSON.SET', key, '$', value);
-      if (ttl && ttl !== Number.POSITIVE_INFINITY)
-        multi.call('EXPIRE', key, ttl);
-
-      return multi.exec();
-    },
+    get: (api, key) => api.jsonGet(key),
+    set: (api, key, value, ttl) => api.jsonSet(key, value, ttl),
   },
   STRING: {
-    get: (redis, key) => redis.multi().call('GET', key).exec(),
-
-    set: (redis, key, value, ttl) => {
-      const multi = redis.multi().call('SET', key, value);
-      if (ttl && ttl !== Number.POSITIVE_INFINITY)
-        multi.call('EXPIRE', key, ttl);
-
-      return multi.exec();
-    },
+    get: (api, key) => api.get(key),
+    set: (api, key, value, ttl) => api.set(key, value, ttl),
   },
 };
 
+/**
+ * Converts an unknown error to an Error instance.
+ */
+const toError = (err: unknown): Error =>
+  err instanceof Error ? err : new Error(String(err));
+
+/**
+ * Retrieves data from cache or database with stale-while-revalidate support.
+ *
+ * Timestamps come from a per-client ServerClock that periodically syncs
+ * with the Redis server's TIME, so reads cost a single GET while staying
+ * consistent across distributed nodes.
+ *
+ * @param params - The cache retrieval parameters
+ * @returns Promise resolving to cached or fresh data with metadata
+ */
 export const getCache = async ({
   ttl,
   stale,
@@ -94,8 +121,14 @@ export const getCache = async ({
   redis,
   args: xArgs,
   query,
-}: GetDataParams): Promise<unknown> => {
-  const {onError, onHit, onMiss, transformer, type} = config;
+  clock,
+}: GetDataParams): Promise<InternalCacheResult> => {
+  const {debug, metricsCollector, onError, onHit, onMiss, transformer, type} =
+    config;
+  const logger = debug ? createDebugLogger(debug) : noopLogger;
+  const startTime = Date.now();
+
+  logger.debug(`Cache lookup started`, {key, ttl, stale});
 
   if (!commands[type])
     throw new Error(
@@ -103,12 +136,38 @@ export const getCache = async ({
     );
 
   const command = commands[type];
+  const {api} = resolveRedisApi(redis);
+  const serverClock =
+    clock ??
+    getServerClock(api, error => {
+      logger.warn(`Redis TIME sync failed; timestamps use the local clock`, {
+        error: error.message,
+      });
+      if (onError) onError(error);
+    });
 
-  const [[error, cached]] = (await command.get(redis, key)) ?? [];
+  // Track errors during cache operations
+  const errors: CacheErrors = {};
 
-  if (onError && error) onError(error);
+  const reportError = (
+    field: keyof CacheErrors,
+    error: unknown,
+    message: string,
+  ): void => {
+    errors[field] = toError(error);
+    logger.error(message, {key, error});
+    if (metricsCollector) metricsCollector.recordError();
+    if (onError) onError(error);
+  };
 
-  const timestamp = Date.now() / 1000;
+  let cached: string | null = null;
+  try {
+    cached = await command.get(api, key);
+  } catch (readError) {
+    reportError('cacheRead', readError, `Cache read error`);
+  }
+
+  const timestamp = serverClock.nowSeconds();
 
   const args = {
     ...xArgs,
@@ -116,11 +175,91 @@ export const getCache = async ({
     meta: undefined,
   };
 
+  // recache must bypass the cached entry (a plain getCache would return
+  // the still-fresh entry): query the database and overwrite the cache
+  const createRecache = (): (() => Promise<InternalCacheResult>) => {
+    return () => queryAndCache();
+  };
+
+  const createUncache = (): (() => Promise<{deleted: number}>) => {
+    return async () => ({deleted: await api.del([key])});
+  };
+
+  const getErrorsMeta = (): CacheErrors | undefined =>
+    Object.keys(errors).length > 0 ? errors : undefined;
+
+  const buildMeta = (
+    source: CacheSource,
+    isCached: boolean,
+    cachedAt: number,
+    entryTtl: number,
+    entryStale: number,
+  ) => ({
+    isCached,
+    key,
+    source,
+    cachedAt,
+    expiresAt: cachedAt + entryTtl,
+    staleUntil: cachedAt + entryTtl + entryStale,
+    recache: createRecache(),
+    uncache: createUncache(),
+    errors: getErrorsMeta(),
+  });
+
+  /**
+   * Serializes and writes a result to the cache, stamping it with the
+   * server time at write time. Returns the stamped timestamp.
+   */
+  const writeCache = async (result: unknown): Promise<number> => {
+    const cachedAt = serverClock.nowSeconds();
+    const newCacheContext: CacheContext = {
+      isCached: true,
+      result,
+      stale,
+      timestamp: cachedAt,
+      ttl,
+    };
+    try {
+      await command.set(
+        api,
+        key,
+        (transformer?.serialize || JSON.stringify)(newCacheContext),
+        ttl + stale,
+      );
+    } catch (writeError) {
+      reportError('cacheWrite', writeError, `Cache write error`);
+    }
+    return cachedAt;
+  };
+
+  const queryAndCache = async (): Promise<InternalCacheResult> => {
+    const result = await query(args);
+    const cachedAt = await writeCache(result);
+    logger.debug(`Cache populated`, {key, ttl, stale});
+    if (metricsCollector) metricsCollector.recordMiss(Date.now() - startTime);
+    return {
+      result,
+      meta: buildMeta('db', false, cachedAt, ttl, stale),
+    };
+  };
+
   if (cached) {
+    // Attempt to deserialize cached data
+    let cacheContext: CacheContext;
+    try {
+      cacheContext = (transformer?.deserialize || JSON.parse)(cached);
+    } catch (parseError) {
+      // Deserialization failed - treat as cache miss
+      reportError(
+        'cacheRead',
+        parseError,
+        `Cache deserialization failed, treating as miss`,
+      );
+      if (onMiss) onMiss(key);
+      return queryAndCache();
+    }
+
     if (onHit) onHit(key);
-    const cacheContext: CacheContext = (transformer?.deserialize || JSON.parse)(
-      cached as string,
-    );
 
     const {
       isCached,
@@ -130,126 +269,95 @@ export const getCache = async ({
       ttl: cacheTtl,
     } = cacheContext;
 
-    if (timestamp < cacheTime + cacheTtl)
+    // Fresh cache - return immediately
+    if (timestamp < cacheTime + cacheTtl) {
+      logger.debug(`Cache hit (fresh)`, {
+        key,
+        age: Math.round(timestamp - cacheTime),
+        ttl: cacheTtl,
+      });
+      if (metricsCollector) metricsCollector.recordHit(Date.now() - startTime);
       return {
         result,
-        meta: {
-          cachedAt: cacheTime,
-          expiresAt: cacheTime + cacheTtl,
-          isCached,
-          key,
-          recache: () =>
-            getCache({
-              ttl,
-              stale,
-              config,
-              key,
-              redis,
-              args,
-              query,
-            }) as unknown as Promise<
-              ReturnType<typeof promiseCoalesceGetCache>
-            >,
-          source: 'cache',
-          staleUntil: cacheTime + cacheStale,
-          uncache: () => redis.del(key).then(deleted => ({deleted})),
-        },
-      } as unknown as ReturnType<typeof promiseCoalesceGetCache>;
+        meta: buildMeta('cache', isCached, cacheTime, cacheTtl, cacheStale),
+      };
+    }
 
-    if (timestamp <= cacheTime + cacheStale)
-      query(args).then(result => {
-        const cacheContext = {
-          isCached: true,
-          key,
-          result,
-          stale,
-          timestamp,
-          ttl,
-        };
-        command.set(
-          redis,
-          key,
-          (transformer?.serialize || JSON.stringify)(cacheContext),
-          ttl + stale,
-        );
-      });
-
-    return {
-      result,
-      meta: {
-        isCached,
+    // Stale cache - return stale data and trigger background refresh
+    if (timestamp <= cacheTime + cacheTtl + cacheStale) {
+      logger.debug(`Cache hit (stale), triggering background refresh`, {
         key,
-        source: 'stale-cache',
-        expiresAt: cacheTime + cacheTtl,
-        staleUntil: cacheTime + cacheStale,
-        cachedAt: cacheTime,
-        recache: async () =>
-          (await getCache({
-            ttl,
-            stale,
-            config,
-            key,
-            redis,
-            args,
-            query,
-          })) as unknown as ReturnType<typeof promiseCoalesceGetCache>,
-        uncache: async () => {
-          const deleted = await redis.del(key);
-          return {deleted};
-        },
-      },
-    } as unknown as ReturnType<typeof promiseCoalesceGetCache>;
+        age: Math.round(timestamp - cacheTime),
+        ttl: cacheTtl,
+        staleWindow: cacheStale,
+      });
+      // Use a unique key to track this specific background refresh
+      const refreshKey = `refresh:${key}`;
+
+      // Only start a background refresh if one isn't already in flight
+      // This prevents duplicate DB queries when multiple concurrent requests
+      // hit stale cache simultaneously
+      if (!backgroundRefreshes.has(refreshKey)) {
+        if (metricsCollector) metricsCollector.recordBackgroundRefresh();
+        const refreshPromise = query(args)
+          .then(async refreshResult => {
+            await writeCache(refreshResult);
+          })
+          .catch(refreshError => {
+            // Track background refresh error (note: this won't be in current response
+            // since it's async, but it will be reported via onError)
+            reportError(
+              'backgroundRefresh',
+              refreshError,
+              `Background refresh failed`,
+            );
+          })
+          .finally(() => {
+            // Clean up tracking once refresh completes (success or failure)
+            backgroundRefreshes.delete(refreshKey);
+          });
+
+        backgroundRefreshes.set(refreshKey, refreshPromise);
+      }
+
+      if (metricsCollector)
+        metricsCollector.recordStaleHit(Date.now() - startTime);
+      return {
+        result,
+        meta: buildMeta(
+          'stale-cache',
+          isCached,
+          cacheTime,
+          cacheTtl,
+          cacheStale,
+        ),
+      };
+    }
   }
 
-  if (!cached && onMiss) onMiss(key);
-
-  const result = await query(args);
-
-  const cacheContext = {isCached: true, key, result, stale, timestamp, ttl};
-  command.set(
-    redis,
-    key,
-    (transformer?.serialize || JSON.stringify)(cacheContext),
-    ttl + stale,
-  );
-
-  return {
-    result,
-    meta: {
-      isCached: false,
-      key,
-      source: 'db',
-      expiresAt: timestamp + ttl,
-      staleUntil: timestamp + stale,
-      cachedAt: timestamp,
-      recache: async () =>
-        (await getCache({
-          ttl,
-          stale,
-          config,
-          key,
-          redis,
-          args,
-          query,
-        })) as unknown as ReturnType<typeof promiseCoalesceGetCache>,
-      uncache: async () => {
-        const deleted = await redis.del(key);
-        return {deleted};
-      },
-    },
-  } as unknown as ReturnType<typeof promiseCoalesceGetCache>;
+  // Cache miss - query database and cache result
+  logger.debug(`Cache miss, querying database`, {key});
+  if (onMiss) onMiss(key);
+  return queryAndCache();
 };
 
+/**
+ * Wraps getCache with promise coalescing to prevent duplicate database
+ * queries when multiple identical requests arrive simultaneously.
+ */
 export const promiseCoalesceGetCache = ({
   key,
   ...rest
-}: GetDataParams): Promise<unknown> =>
-  coalesceAsync(key, async () => getCache({key, ...rest}));
+}: GetDataParams): Promise<InternalCacheResult> =>
+  coalesce(key, () => getCache({key, ...rest}));
 
+/**
+ * Handles auto-caching for Prisma operations based on configuration.
+ */
 export const autoCacheAction = async (
   {redis, options, config}: ActionParams,
   getAutoKey: ReturnType<typeof getAutoKeyGen>,
-) => {
+): Promise<unknown | InternalCacheResult> => {
   const {auto} = config;
 
   const {args, model, operation, query} = options;
@@ -282,19 +390,23 @@ export const autoCacheAction = async (
 
   const argsWithMeta = args as JsArgs & {meta?: boolean};
   const effectiveMeta = argsWithMeta.meta ?? false;
-  return effectiveMeta ? wrapped : (wrapped as {result: unknown}).result;
+  return effectiveMeta ? wrapped : wrapped.result;
 };
 
+/**
+ * Handles custom caching with user-specified cache key and options.
+ */
 export const customCacheAction = async ({
   redis,
   options: {args, query},
   config,
-}: ActionParams) => {
-  const {
-    key,
-    ttl: customTtl,
-    stale: customStale,
-  } = args.cache as unknown as CacheOptions;
+}: ActionParams): Promise<unknown | InternalCacheResult> => {
+  const cacheOptions = args.cache as unknown as CacheOptions;
+
+  // Validate cache options before proceeding
+  validateCacheOptions(cacheOptions);
+
+  const {key, ttl: customTtl, stale: customStale} = cacheOptions;
 
   const ttl = customTtl ?? config.ttl;
   const stale = customStale ?? config.stale;
@@ -311,7 +423,7 @@ export const customCacheAction = async ({
 
   const argsWithMeta = args as JsArgs & {meta?: boolean};
   const effectiveMeta = argsWithMeta.meta ?? false;
-  return effectiveMeta ? wrapped : (wrapped as {result: unknown}).result;
+  return effectiveMeta ? wrapped : wrapped.result;
 };
 
 export const customUncacheAction = async ({
@@ -320,6 +432,7 @@ export const customUncacheAction = async ({
   config,
 }: ActionParams) => {
   const {uncacheKeys, hasPattern} = args.uncache as unknown as UncacheOptions;
+  const {api} = resolveRedisApi(redis);
 
   if (hasPattern) {
     // Check if any key contains wildcard characters (* or ?)
@@ -335,8 +448,8 @@ export const customUncacheAction = async ({
         chunkSize: config.chunkSize,
       });
       await Promise.all(unlinkPromises);
-    } else await redis.del(uncacheKeys);
-  } else await redis.del(uncacheKeys);
+    } else await api.del(uncacheKeys);
+  } else await api.del(uncacheKeys);
 
   // Uncache operations should always return the plain Prisma result
   return await query({...args, uncache: undefined, meta: undefined});

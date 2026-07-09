@@ -1,6 +1,6 @@
 {
   "name": "prisma-extension-redis",
-  "version": "3.3.2",
+  "version": "3.4.0",
   "description": "Extensive Prisma extension designed for efficient caching and cache invalidation using Redis and Dragonfly Databases",
   "repository": {
     "type": "git",
@@ -40,6 +40,10 @@
     "caching-middleware"
   ],
   "license": "MIT",
+  "sideEffects": false,
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24.0"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -51,9 +55,6 @@
     },
     "./package.json": "./package.json"
   },
-  "typesVersions": {
-    "*": {}
-  },
   "files": [
     "dist/**/*",
     "package.json",
@@ -63,35 +64,49 @@
   ],
   "scripts": {
     "build": "tsup",
-    "biome": "biome",
     "dev": "tsup --watch",
     "test": "bun test",
     "check": "biome check",
     "check:write": "biome check --write",
-    "prisma:migrate": "bunx prisma migrate dev --schema ./test/prisma/schema.prisma",
-    "prisma:generate": "bunx prisma generate --schema ./test/prisma/schema.prisma",
+    "prisma:migrate": "bunx prisma migrate dev --config ./test/prisma/prisma.config.ts",
+    "prisma:generate": "bunx prisma generate --config ./test/prisma/prisma.config.ts",
     "pretest": "bun run prisma:migrate && bun run prisma:generate",
     "posttest": "bun run check",
     "release": "semantic-release"
   },
   "devDependencies": {
-    "@amanda-mitchell/semantic-release-npm-multiple": "^3.16.0",
-    "@biomejs/biome": "^2.2.5",
+    "@amanda-mitchell/semantic-release-npm-multiple": "^3.17.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@biomejs/biome": "^2.5.3",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
-    "@types/bun": "^1.2.23",
-    "@types/node": "^24.6.2",
-    "semantic-release": "^24.2.9",
-    "tsup": "^8.5.0",
+    "@types/bun": "^1.3.14",
+    "@types/node": "^25.9.5",
+    "dotenv": "^17.4.2",
+    "prisma": "^7.8.0",
+    "semantic-release": "^25.0.5",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },
   "publishConfig": {
     "access": "public"
   },
+  "overrides": {
+    "handlebars": "^4.7.9",
+    "lodash": "^4.17.23",
+    "lodash-es": "^4.17.23",
+    "js-yaml": "^4.1.1",
+    "@hono/node-server": "^1.19.13",
+    "rollup": "^4.59.0",
+    "brace-expansion": "^2.0.3",
+    "@isaacs/brace-expansion": "^5.0.1",
+    "esbuild": "^0.28.1"
+  },
+  "peerDependencies": {
+    "@prisma/client": "^7.2.0"
+  },
   "dependencies": {
-    "@prisma/client": "^6.16.3",
-    "iovalkey": "^0.3.3",
-    "object-code": "^1.3.4",
-    "promise-coalesce": "^1.1.2"
+    "iovalkey": "^0.3.3"
   }
 }

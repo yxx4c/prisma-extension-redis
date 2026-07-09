@@ -1,12 +1,12 @@
-import {PrismaClient} from '@prisma/client';
+import {PrismaLibSql} from '@prisma/adapter-libsql';
 import {
   type AutoCacheConfig,
   type CacheConfig,
   PrismaExtensionRedis,
 } from 'prisma-extension-redis';
-
 import {users} from './data';
 import env from './env';
+import {PrismaClient} from './prisma/generated/prisma/client';
 import {getRandomValue} from './utils';
 
 // Create a Redis client
@@ -22,34 +22,25 @@ const auto: AutoCacheConfig = {
     {
       model: 'User',
       excludedOperations: [],
-      ttl: 120, // Time-to-live for caching in seconds
-      stale: 30, // Stale time for caching in seconds
+      ttl: 120, // Fresh for 120 seconds
+      stale: 30, // Then served stale for up to 30 more seconds while refreshing in background
     },
-  ], // main auto-cache configuration for specific models
+  ],
   ttl: 30, // Default time-to-live for auto-caching
 };
 
 const config: CacheConfig = {
-  ttl: 60, // Default Time-to-live for caching in seconds
-  stale: 30, // Default Stale time after ttl in seconds
+  ttl: 60, // Default time-to-live in seconds: data is fresh until cachedAt + ttl
+  stale: 30, // Extra stale window after ttl; entries live in Redis for ttl + stale seconds
   auto,
   chunkSize: 500, // Chunk size for batch operations (e.g., pattern-based key deletion)
-  // transformer: {
-  //   // Use, main serialize and deserialize function for additional functionality if required
-  //   deserialize: data => SuperJSON.parse(data), // default value of deserialize function
-  //   serialize: data => SuperJSON.stringify(data), // default value of serialize function
-  // },
-  // onHit: (key: string) => console.log(`FOUND CACHE: ${key}`),
-  // onMiss: (key: string) => console.log(`NOT FOUND CACHE: ${key}`),
   type: 'JSON', // the redis instance must support JSON module if you chose to use JSON type cache
-  // cacheKey: {
-  // case: CacheCase.CAMEL_CASE,
-  // delimiter: '*',
-  // prefix: 'awesomeness',
-  // },
 };
 
-const prisma = new PrismaClient();
+// Prisma 7 uses driver adapters for database access
+const adapter = new PrismaLibSql({url: 'file:prisma/sqlite.db'});
+
+const prisma = new PrismaClient({adapter});
 const extendedPrisma = prisma.$extends(PrismaExtensionRedis({config, client}));
 
 const resultSourceString = (isCached: boolean) =>
@@ -140,11 +131,6 @@ const main = async () => {
       console.info(
         `CUSTOM: ${resultSourceString(meta.isCached)}: Find userOne`,
         {
-          // transforming date type value retrieved from cache to confirm that the date is parsed correctly
-          // user: {
-          //   ...user,
-          //   createdAt: user?.createdAt.toLocaleDateString(),
-          // },
           user,
           meta,
         },
@@ -190,7 +176,7 @@ const main = async () => {
       where: {email: userTwo.email},
       cache: {
         key: extendedPrisma.getKey({
-          params: [{prisma: 'User'}, {email: userOne.email}],
+          params: [{prisma: 'User'}, {email: userTwo.email}],
         }),
         ttl: 60,
       },
@@ -211,7 +197,7 @@ const main = async () => {
       where: {email: userTwo.email},
       cache: {
         key: extendedPrisma.getKey({
-          params: [{prisma: 'User'}, {email: userOne.email}],
+          params: [{prisma: 'User'}, {email: userTwo.email}],
         }),
         ttl: 60,
       },
@@ -221,11 +207,6 @@ const main = async () => {
       console.info(
         `CUSTOM: ${resultSourceString(meta.isCached)}: Find userTwo`,
         {
-          // transforming date type value retrieved from cache to confirm that the date is parsed correctly
-          // user: {
-          //   ...user,
-          //   createdAt: user?.createdAt.toLocaleDateString(),
-          // },
           user,
           meta,
         },

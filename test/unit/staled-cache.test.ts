@@ -13,18 +13,18 @@ test('User Creation: should create a new user', async () => {
   const userOne = users.find(user => user.id === 1);
   if (!userOne) throw new Error('Invalid user information!');
 
-  expect(createUser(extendedPrismaWithExtendedStale, userOne)).resolves.toEqual(
-    {
-      result: userOne,
-    },
-  );
+  await expect(
+    createUser(extendedPrismaWithExtendedStale, userOne),
+  ).resolves.toEqual({
+    result: userOne,
+  });
 });
 
 test('User Retrieval: should find a user by email from the database', async () => {
   const userOne = users.find(user => user.id === 1);
   if (!userOne) throw new Error('Invalid user information!');
 
-  expect(
+  await expect(
     autoFindUserByWhereUniqueInput(extendedPrismaWithExtendedStale, {
       email: userOne.email,
     }),
@@ -40,7 +40,7 @@ test('User Retrieval: should find a user by email from staled cache', async () =
 
   await delay(1000);
 
-  expect(
+  await expect(
     autoFindUserByWhereUniqueInput(extendedPrismaWithExtendedStale, {
       email: userOne.email,
     }),

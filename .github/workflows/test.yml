@@ -16,8 +16,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 3
-        volumes:
-          - dragonfly:/data
       postgres:
         image: postgres:alpine
         ports:
@@ -31,18 +29,16 @@ jobs:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
           POSTGRES_DB: testdb
-        volumes:
-          - postgres:/var/lib/postgresql/data
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set Up Bun Package Manager
         uses: oven-sh/setup-bun@v2
 
       - name: Install Project Dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Run Test Suite
         env:
@@ -51,6 +47,6 @@ jobs:
         run: bun run test
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

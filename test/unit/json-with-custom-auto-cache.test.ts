@@ -16,14 +16,14 @@ test('User Creation: should create a new user', async () => {
   const userOne = users.find(user => user.id === 1);
   if (!userOne) throw new Error('Invalid user information!');
 
-  expect(createUser(extendedPrisma, userOne)).resolves.toEqual({
+  await expect(createUser(extendedPrisma, userOne)).resolves.toEqual({
     result: userOne,
   });
 });
 
 test('User Creation: should create multiple new users', async () => {
   const newUsers = users.filter(user => ![1, 2, 3].includes(user.id));
-  expect(createManyUser(extendedPrisma, newUsers)).resolves.toEqual({
+  await expect(createManyUser(extendedPrisma, newUsers)).resolves.toEqual({
     result: newUsers,
   });
 });
@@ -34,16 +34,18 @@ test("User Update: should update a user's details", async () => {
   if (!userOne || !userTwo) throw new Error('Invalid user information!');
 
   const updatedUser = {...userTwo, id: userOne.id};
-  expect(updateUserDetails(extendedPrisma, updatedUser)).resolves.toEqual({
-    result: updatedUser,
-  });
+  await expect(updateUserDetails(extendedPrisma, updatedUser)).resolves.toEqual(
+    {
+      result: updatedUser,
+    },
+  );
 });
 
 test('User Retrieval: should find a user by email from the database', async () => {
   const userTen = users.find(user => user.id === 10);
   if (!userTen) throw new Error('Invalid user information!');
 
-  expect(
+  await expect(
     autoFindUserByWhereUniqueInput(extendedPrisma, {email: userTen.email}),
   ).resolves.toEqual({
     result: userTen,
@@ -55,7 +57,7 @@ test('User Retrieval: should find a user by email from cache', async () => {
   const userTen = users.find(user => user.id === 10);
   if (!userTen) throw new Error('Invalid user information!');
 
-  expect(
+  await expect(
     autoFindUserByWhereUniqueInput(extendedPrisma, {email: userTen.email}),
   ).resolves.toEqual({
     result: userTen,
@@ -67,7 +69,7 @@ test('Custom User Retrieval: should find a user by email from the database', asy
   const userThirteen = users.find(user => user.id === 13);
   if (!userThirteen) throw new Error('Invalid user information!');
 
-  expect(
+  await expect(
     customFindUserByWhereUniqueInput(
       extendedPrisma,
       {email: userThirteen.email},
@@ -86,7 +88,7 @@ test('Custom User Retrieval: should find a user by email from cache', async () =
   const userThirteen = users.find(user => user.id === 13);
   if (!userThirteen) throw new Error('Invalid user information!');
 
-  expect(
+  await expect(
     customFindUserByWhereUniqueInput(
       extendedPrisma,
       {email: userThirteen.email},

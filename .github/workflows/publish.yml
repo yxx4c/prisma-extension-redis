@@ -12,9 +12,54 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    services:
+      dragonfly:
+        image: "docker.dragonflydb.io/dragonflydb/dragonfly"
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+      postgres:
+        image: postgres:alpine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: testdb
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set Up Bun Package Manager
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Project Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Test Suite
+        env:
+          REDIS_SERVICE_URI: redis://localhost:6379
+          POSTGRES_SERVICE_URI: postgres://user:password@localhost:5432/testdb
+        run: bun run test
+
   publish:
     name: publish
+    needs: test
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: write
       issues: write
@@ -22,40 +67,44 @@ jobs:
       id-token: write
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set Up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: lts/*
+          node-version: 22
 
       - name: Set Up Bun
         uses: oven-sh/setup-bun@v2
 
       - name: Install Project Dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Build the package
         run: bun run build
 
+      - name: Prepare npm Packages build
+        run: |
+          mkdir -p dist-npm
+          cp -r dist dist-npm/
+          cp CHANGELOG.md LICENSE README.md package.json dist-npm/
       - name: Prepare GitHub Packages build
         run: |
-          mkdir -p build-github
-          cp -r dist build-github/
-          cp CHANGELOG.md LICENSE README.md build-github/
-          # Create scoped package.json for GitHub Packages
-          sed 's/"name": "prisma-extension-redis"/"name": "@yxx4c\/prisma-extension-redis"/' package.json > build-github/package.json
+          mkdir -p dist-github
+          cp -r dist dist-github/
+          cp CHANGELOG.md LICENSE README.md dist-github/
+          sed 's/"name": "prisma-extension-redis"/"name": "@yxx4c\/prisma-extension-redis"/' package.json > dist-github/package.json
 
       - name: Create Distribution Archive
         run: |
-          zip -r build.zip dist package.json README.md LICENSE
-          tar -czvf build.tar.gz dist package.json README.md LICENSE
+          mkdir -p dist-archive
+          zip -r dist-archive/build.zip dist package.json README.md LICENSE CHANGELOG.md
+          tar -czvf dist-archive/build.tar.gz dist package.json README.md LICENSE CHANGELOG.md
 
       - name: Publish Package
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_NPM_CONFIG_REGISTRY: https://npm.pkg.github.com/
-          GITHUB_NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLIC_NPM_CONFIG_REGISTRY: https://registry.npmjs.org
-          PUBLIC_NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_NPM_TOKEN: ${{ secrets.GH_NPM_TOKEN }}
+          PUBLIC_NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
         run: bun run release

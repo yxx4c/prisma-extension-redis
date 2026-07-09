@@ -5,8 +5,10 @@ import type {
   JsArgs,
   ModelQueryOptionsCbArgs,
   Operation,
-} from '@prisma/client/runtime/library';
-import type {Redis, RedisOptions} from 'iovalkey';
+} from '@prisma/client/runtime/client';
+import type {DebugLevelType} from './constants';
+import type {MetricsCollector} from './metrics';
+import type {RedisClientInput, ServerClock} from './redisApi';
 
 export const ALL_OPERATIONS = [
   '$executeRaw',
@@ -103,25 +105,6 @@ export const UNCACHE_OPERATIONS = [
   ...UNCACHE_OPTIONAL_ARG_OPERATIONS,
 ] as const;
 
-export interface CacheOptionsWithStale {
-  /**
-   * Key for caching
-   */
-  key: string;
-
-  /**
-   * Custom time-to-live (ttl) value.
-   * If undefined, key stays in cache till uncached
-   */
-  ttl?: number;
-
-  /**
-   * Custom stale value.
-   * Stale cannot be set without ttl
-   */
-  stale?: never;
-}
-
 export interface CacheOptionsWithoutStale {
   /**
    * Key for caching
@@ -129,19 +112,38 @@ export interface CacheOptionsWithoutStale {
   key: string;
 
   /**
-   * Custom time-to-live (ttl) value.
-   * If undefined, key stays in cache till uncached
+   * Time-to-live in seconds: data is fresh until cachedAt + ttl.
+   * If undefined, the key stays cached until explicitly uncached
+   */
+  ttl?: number;
+
+  /**
+   * stale cannot be set without ttl
+   */
+  stale?: never;
+}
+
+export interface CacheOptionsWithStale {
+  /**
+   * Key for caching
+   */
+  key: string;
+
+  /**
+   * Time-to-live in seconds: data is fresh until cachedAt + ttl
    */
   ttl: number;
 
   /**
-   * Custom stale value.
+   * Extra stale window in seconds after ttl expires, during which stale
+   * data is still served while a background refresh runs. The key lives
+   * in Redis for ttl + stale seconds in total.
    * If undefined, stale is zero
    */
   stale?: number;
 }
 
-export type CacheOptions = CacheOptionsWithStale | CacheOptionsWithoutStale;
+export type CacheOptions = CacheOptionsWithoutStale | CacheOptionsWithStale;
 
 export interface UncacheOptions {
   /**
@@ -177,7 +179,25 @@ type PrismaMetaArg = {
 
 export type CacheSource = 'cache' | 'stale-cache' | 'db';
 
-type Meta<T, A, O extends Operation> = {
+/**
+ * Error information captured during cache operations.
+ * Errors are tracked but don't prevent operation - cache gracefully
+ * degrades to database queries on failure.
+ */
+export type CacheErrors = {
+  /** Error during cache read operation */
+  cacheRead?: Error;
+  /** Error during cache write operation */
+  cacheWrite?: Error;
+  /** Error during background refresh (stale-while-revalidate) */
+  backgroundRefresh?: Error;
+};
+
+/**
+ * Metadata returned with cached query results.
+ * Contains information about cache state, timing, and control functions.
+ */
+export type Meta<T, A, O extends Operation> = {
   cachedAt: number;
   expiresAt: number;
   isCached: boolean;
@@ -186,14 +206,62 @@ type Meta<T, A, O extends Operation> = {
   source: CacheSource;
   staleUntil: number;
   uncache: () => Promise<{deleted: number}>;
+  /** Errors encountered during cache operations (if any) */
+  errors?: CacheErrors;
 };
 
-type ResultWithMeta<T, A, O extends Operation> = {
+/**
+ * Result type when meta: true is passed to a cached query.
+ */
+export type ResultWithMeta<T, A, O extends Operation> = {
   result: Prisma.Result<T, A, O>;
   meta: Meta<T, A, O>;
 };
 
 type ResultPlain<T, A, O extends Operation> = Prisma.Result<T, A, O>;
+
+/**
+ * Internal cache result structure returned by getCache.
+ * This type is used internally and should not be exported to users.
+ */
+export type InternalCacheResult = {
+  result: unknown;
+  meta: {
+    cachedAt: number;
+    expiresAt: number;
+    isCached: boolean;
+    key: string;
+    recache: () => Promise<InternalCacheResult>;
+    source: CacheSource;
+    staleUntil: number;
+    uncache: () => Promise<{deleted: number}>;
+    /** Errors encountered during cache operations (if any) */
+    errors?: CacheErrors;
+  };
+};
+
+/**
+ * Non-cached result structure when meta: true is passed but caching is disabled.
+ */
+/**
+ * Meta result for queries that ran without caching (no cache/auto config
+ * matched) but were called with meta: true. recache() re-executes the
+ * query against the database; uncache() is a no-op returning {deleted: 0}
+ * because nothing was written to the cache on this path.
+ */
+export type NonCachedMetaResult = {
+  result: unknown;
+  meta: {
+    cachedAt: 0;
+    expiresAt: 0;
+    isCached: false;
+    key: '';
+    recache: () => Promise<NonCachedMetaResult>;
+    source: 'db';
+    staleUntil: 0;
+    uncache: () => Promise<{deleted: 0}>;
+  };
+};
 
 interface AutoRequiredArgsFunction<O extends Operation> {
   <T, A>(
@@ -344,12 +412,14 @@ export type CacheConfig = {
   cacheKey?: CacheKey;
 
   /**
-   * Default time-to-live (ttl) value
+   * Default time-to-live in seconds: data is fresh until cachedAt + ttl
    */
   ttl: number;
 
   /**
-   * Default stale time after ttl
+   * Default extra stale window in seconds after ttl expires, during
+   * which stale data is still served while a background refresh runs.
+   * Keys live in Redis for ttl + stale seconds in total
    */
   stale: number;
 
@@ -375,6 +445,22 @@ export type CacheConfig = {
   onError?: (error: unknown) => void;
   onHit?: (key: string) => void;
   onMiss?: (key: string) => void;
+
+  /**
+   * Metrics collector for tracking cache performance.
+   * Use createMetricsCollector() to create one.
+   */
+  metricsCollector?: MetricsCollector;
+
+  /**
+   * Debug logging level for troubleshooting cache operations.
+   * - 'off': No logging (default)
+   * - 'error': Only errors
+   * - 'warn': Errors and warnings
+   * - 'info': Errors, warnings, and info messages
+   * - 'debug': All messages including debug details
+   */
+  debug?: DebugLevelType;
 };
 
 export interface ModelConfig {
@@ -389,7 +475,7 @@ export interface ModelConfig {
   excludedOperations?: autoOperations[];
 
   /**
-   * Auto - stale time after ttl
+   * Model-specific extra stale window in seconds after ttl expires
    */
   stale?: number;
 
@@ -417,7 +503,8 @@ export type AutoCacheConfig =
       models?: ModelConfig[];
 
       /**
-       * Auto stale time after ttl
+       * Default extra stale window in seconds after ttl expires for
+       * auto-cached queries
        */
       stale?: number;
 
@@ -435,16 +522,20 @@ export interface PrismaExtensionRedisOptions {
   config: CacheConfig;
 
   /**
-   * Redis client config (iovalkey)
+   * Redis connection. Accepts iovalkey RedisOptions or a connection
+   * string (a client is constructed for you), an existing
+   * ioredis-compatible instance (iovalkey, ioredis, valkey), an
+   * Upstash-style REST client (@upstash/redis), or any custom RedisApi
+   * implementation.
    */
-  client: RedisOptions;
+  client: RedisClientInput;
 }
 
 export type DeletePatterns = {
   /**
-   * Redis client
+   * Redis client, instance or RedisApi (see PrismaExtensionRedisOptions.client)
    */
-  redis: Redis;
+  redis: RedisClientInput;
 
   /**
    * Patterns for key deletion
@@ -469,9 +560,9 @@ export type ActionParams = {
   options: ModelQueryOptionsCbArgs;
 
   /**
-   * Redis client
+   * Redis client, instance or RedisApi
    */
-  redis: Redis;
+  redis: RedisClientInput;
 
   /**
    * CacheConfig
@@ -506,9 +597,14 @@ export type GetDataParams = {
   stale: number;
   config: CacheConfig;
   key: string;
-  redis: Redis;
+  redis: RedisClientInput;
   args: JsArgs;
   query: (args: JsArgs) => Promise<unknown>;
+  /**
+   * Server-synced clock for timestamps. When omitted, the shared clock
+   * for the resolved client is used.
+   */
+  clock?: ServerClock;
 };
 
 export type CacheContext = {
@@ -519,23 +615,6 @@ export type CacheContext = {
   timestamp: number;
   ttl: number;
 };
-
-export type RedisCacheResultOrError =
-  | [error: Error | null, result: unknown][]
-  | null;
-
-export type RedisCacheCommands = Record<
-  string,
-  {
-    get: (redis: Redis, key: string) => Promise<RedisCacheResultOrError>;
-    set: (
-      redis: Redis,
-      key: string,
-      value: string,
-      ttl: number,
-    ) => Promise<RedisCacheResultOrError>;
-  }
->;
 
 export type CacheKeyParams = {
   /**
