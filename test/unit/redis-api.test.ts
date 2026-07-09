@@ -288,6 +288,19 @@ describe('Upstash-style client support', () => {
   });
 });
 
+describe('resolveRedisApi options-object input', () => {
+  test('plain options objects construct an iovalkey client', async () => {
+    const uri = new URL(process.env.REDIS_SERVICE_URI ?? 'redis://localhost:6379');
+    const {api, raw} = resolveRedisApi({
+      host: uri.hostname,
+      port: Number(uri.port || 6379),
+    });
+
+    expect(await api.ping()).toBe('PONG');
+    await (raw as {quit(): Promise<unknown>}).quit();
+  });
+});
+
 describe('resolveRedisApi rejection', () => {
   test('throws a TypeError for unrecognized client objects', () => {
     const misShaped = {

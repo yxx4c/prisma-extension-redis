@@ -515,6 +515,45 @@ describe('Maintenance Batch Operations', () => {
   });
 });
 
+describe('Expired Beyond Stale Window', () => {
+  test('cached entry past ttl + stale falls through to a database query', async () => {
+    const fake = createFakeRedisApi();
+    const key = 'test:expired:beyond:stale';
+
+    // Plant an entry whose logical timestamps are long past ttl + stale
+    // while it still physically exists (Redis eviction is not instant)
+    const staleContext = {
+      isCached: true,
+      result: {id: 'stale-old'},
+      stale: 30,
+      timestamp: Math.floor(Date.now() / 1000) - 1000,
+      ttl: 60,
+    };
+    await fake.jsonSet(key, JSON.stringify(staleContext));
+
+    const onHit = mock(() => {});
+    const onMiss = mock(() => {});
+
+    const result = await getCache({
+      ttl: 60,
+      stale: 30,
+      config: {ttl: 60, stale: 30, type: 'JSON', onHit, onMiss},
+      key,
+      redis: fake,
+      args: {},
+      query: async () => ({id: 'fresh-from-db'}),
+    });
+
+    // The stale entry is ignored and the database result is returned
+    expect(result.result).toEqual({id: 'fresh-from-db'});
+    expect(result.meta.source).toBe('db');
+    expect(result.meta.isCached).toBe(false);
+    // The entry was found (hit callback) but unusable (miss outcome)
+    expect(onHit).toHaveBeenCalled();
+    expect(onMiss).toHaveBeenCalled();
+  });
+});
+
 describe('Cache Read Error Scenarios', () => {
   const client = process.env.REDIS_SERVICE_URI as RedisOptions;
   const redis = new Redis(client);
