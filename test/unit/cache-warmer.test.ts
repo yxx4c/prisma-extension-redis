@@ -163,7 +163,19 @@ describe('Cache Warmer', () => {
 
       const warmer = prisma.createCacheWarmer(prisma);
 
-      await expect(warmer(queries, {continueOnError: false})).rejects.toThrow();
+      // With concurrency 1 the failing query is its own batch, so the
+      // second query must never be attempted; the documented WarmResult
+      // is still returned with accurate counts instead of throwing
+      const result = await warmer(queries, {
+        concurrency: 1,
+        continueOnError: false,
+      });
+
+      expect(result.total).toBe(2);
+      expect(result.failed).toBe(1);
+      expect(result.successful).toBe(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]?.query.model).toBe('InvalidModel');
     });
 
     test('should use custom TTL and stale values', async () => {

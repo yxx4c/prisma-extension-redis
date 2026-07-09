@@ -119,7 +119,7 @@ const config: CacheConfig = {
   type: 'JSON', // Redis cache type, whether you prefer the data to be stored as JSON or STRING in Redis
   cacheKey: { // Inbuilt cache key configuration
     // caseTransformer?: Function to transform cache key (default: snake_case)
-    delimiter: '*', // Delimiter for keys (default value: ':')
+    delimiter: '/', // Delimiter for keys (default value: ':'). Avoid Redis glob characters (* ? [ ]) — they break pattern-based invalidation
     prefix: 'awesomeness', // Cache key prefix (default value: 'prisma')
   },
 };

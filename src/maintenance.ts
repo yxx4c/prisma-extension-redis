@@ -129,13 +129,14 @@ export const cleanupOrphanedKeys = async ({
           deletePromises.push(redis.unlink(...deleteBuffer));
         }
 
-        // Wait for all deletes to complete
-        await Promise.all(deletePromises);
+        // UNLINK reports how many keys it actually removed, which can be
+        // fewer than staged if keys expired or were deleted concurrently
+        const deleteCounts = await Promise.all(deletePromises);
 
         resolve({
           scannedKeys,
           orphanedKeys,
-          deletedCount: dryRun ? 0 : orphanedKeys.length,
+          deletedCount: deleteCounts.reduce((sum, count) => sum + count, 0),
           durationMs: Date.now() - startTime,
         });
       } catch (error) {
@@ -252,7 +253,6 @@ export const flushModelCache = async ({
 
   const startTime = Date.now();
   const pattern = `${prefix}${delimiter}${model.toLowerCase()}${delimiter}*`;
-  let deletedCount = 0;
 
   return new Promise((resolve, reject) => {
     const stream = redis.scanStream({match: pattern, count: batchSize});
@@ -264,7 +264,6 @@ export const flushModelCache = async ({
 
       while (buffer.length >= batchSize) {
         const toDelete = buffer.splice(0, batchSize);
-        deletedCount += toDelete.length;
         deletePromises.push(redis.unlink(...toDelete));
       }
     });
@@ -274,14 +273,15 @@ export const flushModelCache = async ({
     stream.on('end', async () => {
       try {
         if (buffer.length > 0) {
-          deletedCount += buffer.length;
           deletePromises.push(redis.unlink(...buffer));
         }
 
-        await Promise.all(deletePromises);
+        // UNLINK reports how many keys it actually removed, which can be
+        // fewer than staged if keys expired or were deleted concurrently
+        const deleteCounts = await Promise.all(deletePromises);
 
         resolve({
-          deletedCount,
+          deletedCount: deleteCounts.reduce((sum, count) => sum + count, 0),
           durationMs: Date.now() - startTime,
         });
       } catch (error) {

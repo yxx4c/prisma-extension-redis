@@ -215,30 +215,35 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
               config,
             });
 
-          const result = await query({
-            ...args,
-            cache: undefined,
-            meta: undefined,
-          });
+          const executeNonCached = () =>
+            query({
+              ...args,
+              cache: undefined,
+              meta: undefined,
+            });
 
-          // If meta is not requested, return plain result
-          if (!args.meta) return result;
-
-          // Return non-cached result with meta structure
-          const nonCachedResult: NonCachedMetaResult = {
+          // recache re-runs the query; uncache is a no-op because nothing
+          // was written to the cache on this path
+          const buildNonCached = (result: unknown): NonCachedMetaResult => ({
             result,
             meta: {
               cachedAt: 0,
               expiresAt: 0,
               isCached: false,
               key: '',
-              recache: async () => nonCachedResult,
+              recache: async () => buildNonCached(await executeNonCached()),
               source: 'db',
               staleUntil: 0,
               uncache: async () => ({deleted: 0}),
             },
-          };
-          return nonCachedResult;
+          });
+
+          const result = await executeNonCached();
+
+          // If meta is not requested, return plain result
+          if (!args.meta) return result;
+
+          return buildNonCached(result);
         },
       },
     },

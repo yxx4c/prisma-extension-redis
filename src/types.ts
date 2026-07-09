@@ -243,6 +243,12 @@ export type InternalCacheResult = {
 /**
  * Non-cached result structure when meta: true is passed but caching is disabled.
  */
+/**
+ * Meta result for queries that ran without caching (no cache/auto config
+ * matched) but were called with meta: true. recache() re-executes the
+ * query against the database; uncache() is a no-op returning {deleted: 0}
+ * because nothing was written to the cache on this path.
+ */
 export type NonCachedMetaResult = {
   result: unknown;
   meta: {

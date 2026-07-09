@@ -71,15 +71,23 @@ const LOG_PREFIX = '[prisma-extension-redis]';
  * });
  * ```
  */
+const loggerCache = new Map<DebugLevel, DebugLogger>();
+
 export const createDebugLogger = (
   level: DebugLevel = DEBUG_LEVELS.OFF,
 ): DebugLogger => {
+  // Loggers are pure per level, so cache them: getCache runs on every
+  // cached read and must not allocate a logger per call
+  if (level === DEBUG_LEVELS.OFF) return noopLogger;
+  const cached = loggerCache.get(level);
+  if (cached) return cached;
+
   const shouldLog = (msgLevel: DebugLevel): boolean =>
     levelValues[msgLevel] <= levelValues[level];
 
   const timestamp = () => new Date().toISOString();
 
-  return {
+  const logger: DebugLogger = {
     error: (message, ...args) => {
       if (shouldLog(DEBUG_LEVELS.ERROR)) {
         console.error(`${timestamp()} ${LOG_PREFIX} ERROR:`, message, ...args);
@@ -101,6 +109,9 @@ export const createDebugLogger = (
       }
     },
   };
+
+  loggerCache.set(level, logger);
+  return logger;
 };
 
 /**

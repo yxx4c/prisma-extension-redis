@@ -28,7 +28,12 @@ export interface WarmOptions {
   onProgress?: (completed: number, total: number) => void;
   /** Error callback for individual query failures */
   onQueryError?: (query: WarmQuery, error: Error) => void;
-  /** Whether to continue on errors (default: true) */
+  /**
+   * Whether to continue on errors (default: true).
+   * When false, no further batches are started after the first failure;
+   * queries already in flight complete and are counted. Queries never
+   * attempted are reflected as total - successful - failed.
+   */
   continueOnError?: boolean;
 }
 
@@ -140,15 +145,18 @@ export const createCacheWarmer = (
         }
 
         if (!continueOnError) {
-          throw err;
+          aborted = true;
         }
       }
     };
 
     // Execute with concurrency limit using chunking
     let completed = 0;
+    let aborted = false;
 
     for (let i = 0; i < queries.length; i += concurrency) {
+      if (aborted) break;
+
       const chunk = queries.slice(i, i + concurrency);
       await Promise.all(chunk.map(executeQuery));
 

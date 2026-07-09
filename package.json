@@ -40,6 +40,10 @@
     "caching-middleware"
   ],
   "license": "MIT",
+  "sideEffects": false,
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24.0"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

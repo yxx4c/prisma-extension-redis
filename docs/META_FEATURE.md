@@ -26,6 +26,8 @@ const { result, meta } = await prisma.user.findUnique({
 | `staleUntil` | `number \| undefined` | Unix timestamp (seconds) when stale period ends |
 | `recache` | `() => Promise<T>` | Function to force refresh the cache |
 | `uncache` | `() => Promise<{ deleted: number }>` | Function to delete from cache |
+
+> **Non-cached queries**: when a query runs without caching (no `cache`/auto config matched) but `meta: true` is set, `source` is `'db'` with zeroed timestamps. Its `recache()` re-executes the query against the database, and `uncache()` is a no-op returning `{ deleted: 0 }` because nothing was written to the cache.
 | `errors` | `unknown \| undefined` | Any errors that occurred during cache operations |
 
 ## Understanding Source Values

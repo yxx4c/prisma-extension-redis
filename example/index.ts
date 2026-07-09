@@ -177,7 +177,7 @@ const main = async () => {
       where: {email: userTwo.email},
       cache: {
         key: extendedPrisma.getKey({
-          params: [{prisma: 'User'}, {email: userOne.email}],
+          params: [{prisma: 'User'}, {email: userTwo.email}],
         }),
         ttl: 60,
       },
@@ -198,7 +198,7 @@ const main = async () => {
       where: {email: userTwo.email},
       cache: {
         key: extendedPrisma.getKey({
-          params: [{prisma: 'User'}, {email: userOne.email}],
+          params: [{prisma: 'User'}, {email: userTwo.email}],
         }),
         ttl: 60,
       },
