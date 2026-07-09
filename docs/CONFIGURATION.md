@@ -33,7 +33,7 @@ const prisma = new PrismaClient().$extends(
 | `ttl` | `number` | Yes | - | Time-to-live in seconds for cached entries |
 | `stale` | `number` | No | `0` | Additional stale window after TTL expires |
 | `type` | `'JSON' \| 'STRING'` | Yes | - | Redis storage format |
-| `auto` | `boolean \| AutoCacheConfig` | No | `false` | Enable automatic caching |
+| `auto` | `boolean \| AutoCacheConfig` | Yes | - | Enable automatic caching (`false` disables it) |
 | `transformer` | `TransformerConfig` | No | JSON methods | Custom serialization |
 | `cacheKey` | `CacheKeyConfig` | No | See below | Cache key configuration |
 | `onHit` | `(key: string) => void` | No | - | Cache hit callback |

@@ -105,25 +105,6 @@ export const UNCACHE_OPERATIONS = [
   ...UNCACHE_OPTIONAL_ARG_OPERATIONS,
 ] as const;
 
-export interface CacheOptionsWithStale {
-  /**
-   * Key for caching
-   */
-  key: string;
-
-  /**
-   * Custom time-to-live (ttl) value.
-   * If undefined, key stays in cache till uncached
-   */
-  ttl?: number;
-
-  /**
-   * Custom stale value.
-   * Stale cannot be set without ttl
-   */
-  stale?: never;
-}
-
 export interface CacheOptionsWithoutStale {
   /**
    * Key for caching
@@ -131,19 +112,38 @@ export interface CacheOptionsWithoutStale {
   key: string;
 
   /**
-   * Custom time-to-live (ttl) value.
-   * If undefined, key stays in cache till uncached
+   * Time-to-live in seconds: data is fresh until cachedAt + ttl.
+   * If undefined, the key stays cached until explicitly uncached
+   */
+  ttl?: number;
+
+  /**
+   * stale cannot be set without ttl
+   */
+  stale?: never;
+}
+
+export interface CacheOptionsWithStale {
+  /**
+   * Key for caching
+   */
+  key: string;
+
+  /**
+   * Time-to-live in seconds: data is fresh until cachedAt + ttl
    */
   ttl: number;
 
   /**
-   * Custom stale value.
+   * Extra stale window in seconds after ttl expires, during which stale
+   * data is still served while a background refresh runs. The key lives
+   * in Redis for ttl + stale seconds in total.
    * If undefined, stale is zero
    */
   stale?: number;
 }
 
-export type CacheOptions = CacheOptionsWithStale | CacheOptionsWithoutStale;
+export type CacheOptions = CacheOptionsWithoutStale | CacheOptionsWithStale;
 
 export interface UncacheOptions {
   /**
@@ -406,12 +406,14 @@ export type CacheConfig = {
   cacheKey?: CacheKey;
 
   /**
-   * Default time-to-live (ttl) value
+   * Default time-to-live in seconds: data is fresh until cachedAt + ttl
    */
   ttl: number;
 
   /**
-   * Default stale time after ttl
+   * Default extra stale window in seconds after ttl expires, during
+   * which stale data is still served while a background refresh runs.
+   * Keys live in Redis for ttl + stale seconds in total
    */
   stale: number;
 
@@ -467,7 +469,7 @@ export interface ModelConfig {
   excludedOperations?: autoOperations[];
 
   /**
-   * Auto - stale time after ttl
+   * Model-specific extra stale window in seconds after ttl expires
    */
   stale?: number;
 
@@ -495,7 +497,8 @@ export type AutoCacheConfig =
       models?: ModelConfig[];
 
       /**
-       * Auto stale time after ttl
+       * Default extra stale window in seconds after ttl expires for
+       * auto-cached queries
        */
       stale?: number;
 

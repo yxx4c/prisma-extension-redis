@@ -42,6 +42,8 @@ pnpm add prisma-extension-redis
 bun add prisma-extension-redis
 ```
 
+**Note**: `@prisma/client` (v7.2 or higher) is a peer dependency — your project provides its own Prisma client, which this extension attaches to.
+
 ---
 
 ## Setup and Configuration
@@ -51,21 +53,22 @@ bun add prisma-extension-redis
 Before setting up caching, initialize your Prisma client and Redis client config:
 
 ```javascript
-import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg'; // Driver adapter for your database
 import {
   PrismaExtensionRedis,
   type AutoCacheConfig,
   type CacheConfig,
 } from 'prisma-extension-redis';
+import { PrismaClient } from './generated/prisma/client'; // Prisma 7 generated client
 
-
-// Prisma Client
-const prisma = new PrismaClient();
+// Prisma 7 uses driver adapters for database access
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter });
 
 // Redis client config
 const client = {
-  host: process.env.REDIS_HOST_NAME, // Redis host
-  port: process.env.REDIS_PORT,      // Redis port
+  host: process.env.REDIS_HOST_NAME,    // Redis host
+  port: Number(process.env.REDIS_PORT), // Redis port
 };
 ```
 
@@ -83,8 +86,8 @@ const auto: AutoCacheConfig = {
     {
       model: 'User', // Model-specific auto-cache settings
       excludedOperations: ['count'], // Operations to exclude
-      ttl: 10,  // Time-to-live (TTL) for cache in seconds
-      stale: 5, // Stale time in seconds
+      ttl: 10,  // Fresh for 10 seconds
+      stale: 5, // Then serve stale data for up to 5 more seconds while refreshing in background
     },
   ],
   ttl: 30, // Default TTL for cache in seconds
@@ -94,7 +97,7 @@ const auto: AutoCacheConfig = {
 **Note**:
 
  1. Excluded operations and models will not benefit from auto-caching.
- 2. Use `ttl` and `stale` values to define caching duration.
+ 2. Use `ttl` and `stale` values to define caching duration: an entry is fresh for `ttl` seconds, then served stale for up to `stale` more seconds (while a background refresh runs), so it lives in Redis for `ttl + stale` seconds in total.
 
 ### Step 3: Configure Cache Client
 
@@ -104,8 +107,8 @@ The cache client configuration is necessary to enable caching, either automatica
 
 ```javascript
 const config: CacheConfig = {
- ttl: 60, // Default Time-to-live for caching in seconds
-  stale: 30, // Default Stale time after ttl in seconds
+  ttl: 60, // Default time-to-live in seconds: data is fresh until cachedAt + ttl
+  stale: 30, // Extra stale window after ttl: stale data is served for up to 30 more seconds while a background refresh runs
   auto, // Auto-caching options (configured above)
   // Optional: Custom serialization (requires 'superjson' package)
   // import SuperJSON from 'superjson';
@@ -216,13 +219,14 @@ extendedPrisma.user.update({
 
 ### 1. **Time-to-Live (TTL)**
 
-- Specifies how long (in seconds) a cached entry should remain before expiring.
+- Specifies how long (in seconds) a cached entry is considered fresh: from `cachedAt` until `cachedAt + ttl`.
 - **Default TTL**: Used when no specific TTL is provided for a query.
 
 ### 2. **Stale Time**
 
-- After the TTL expires, stale time defines how long expired data can still be used while refreshing data in the background.
-- This ensures that users experience minimal latency even when data is being updated.
+- An **extra window after the TTL expires** during which the expired entry is still served while fresh data is fetched in the background: from `cachedAt + ttl` until `cachedAt + ttl + stale` (reported as `staleUntil` in meta).
+- A cached entry therefore lives in Redis for `ttl + stale` seconds in total.
+- This ensures that users experience minimal latency even when data is being updated. Queries served from this window report `source: 'stale-cache'` in their meta.
 
 ### 3. **Cache Key Management**
 
@@ -251,7 +255,7 @@ Get detailed cache information by passing `meta: true` to any cached query:
 ```typescript
 const { result, meta } = await prisma.user.findUnique({
   where: { id: 1 },
-  cache: { key: 'user:1', ttl: 60 },
+  cache: { key: 'user:1', ttl: 60, stale: 30 },
   meta: true,
 });
 
@@ -261,8 +265,8 @@ console.log(meta);
 //   isCached: true,
 //   key: 'user:1',
 //   cachedAt: 1703847600,   // Unix timestamp (seconds)
-//   expiresAt: 1703847660,  // Unix timestamp (seconds)
-//   staleUntil: 1703847690, // Unix timestamp (seconds)
+//   expiresAt: 1703847660,  // cachedAt + ttl
+//   staleUntil: 1703847690, // cachedAt + ttl + stale
 //   recache: [Function],    // Force refresh the cache
 //   uncache: [Function],    // Delete from cache
 //   errors: undefined,      // Any cache operation errors
@@ -410,15 +414,16 @@ console.log(`Deleted ${result.deletedCount} orphaned keys`);
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `ttl` | `number` | Required | Time-to-live in seconds |
-| `stale` | `number` | `0` | Additional stale window after TTL |
+| `ttl` | `number` | Required | Freshness window in seconds (fresh until `cachedAt + ttl`) |
+| `stale` | `number` | `0` | Extra stale window after TTL; entries live for `ttl + stale` seconds in total |
 | `type` | `'JSON' \| 'STRING'` | Required | Redis storage format |
-| `auto` | `boolean \| AutoCacheConfig` | `false` | Enable auto-caching |
+| `auto` | `boolean \| AutoCacheConfig` | Required | Enable auto-caching (`false` disables it) |
 | `transformer` | `{ serialize, deserialize }` | JSON methods | Custom serialization |
 | `onHit` | `(key: string) => void` | - | Cache hit callback |
 | `onMiss` | `(key: string) => void` | - | Cache miss callback |
 | `onError` | `(error: unknown) => void` | - | Error callback |
 | `metricsCollector` | `MetricsCollector` | - | Metrics tracking instance |
+| `debug` | `'off' \| 'error' \| 'warn' \| 'info' \| 'debug'` | `'off'` | Debug logging level |
 | `chunkSize` | `number` | `1000` | Batch size for pattern deletion |
 | `maxConcurrentBatches` | `number` | `5` | Concurrent deletion batches |
 | `cacheKey.prefix` | `string` | `'prisma'` | Cache key prefix |
@@ -433,7 +438,7 @@ console.log(`Deleted ${result.deletedCount} orphaned keys`);
 | `excludedOperations` | `Operation[]` | `[]` | Operations to exclude globally |
 | `models` | `ModelConfig[]` | `[]` | Model-specific configurations |
 | `ttl` | `number` | Config TTL | Default TTL for auto-cached queries |
-| `stale` | `number` | Config stale | Default stale time for auto-cached queries |
+| `stale` | `number` | Config stale | Default extra stale window for auto-cached queries |
 
 ---
 
@@ -446,6 +451,7 @@ console.log(`Deleted ${result.deletedCount} orphaned keys`);
 
 - `iovalkey` package is used for Redis connectivity.
 - `object-code` is used for generating unique hash in auto-caching keys.
+- `promise-coalesce` deduplicates concurrent reads of the same cache key.
 
 ---
 
