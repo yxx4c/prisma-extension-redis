@@ -1,0 +1,187 @@
+name: ⚙️ Configuration Help
+description: Get help with setup, configuration, or integration issues
+title: "[Config]: "
+labels: ["question", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reaching out for configuration help! Please provide as much detail as possible about your setup and the specific issue you're facing.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version of prisma-extension-redis are you using?
+      placeholder: e.g., 3.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: prisma-version
+    attributes:
+      label: Prisma Version
+      description: What version of Prisma are you using?
+      placeholder: e.g., 5.7.0
+    validations:
+      required: true
+
+  - type: input
+    id: redis-version
+    attributes:
+      label: Redis/Dragonfly Version
+      description: What version of Redis or Dragonfly are you using?
+      placeholder: e.g., Redis 7.2.0 or Dragonfly 6.2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Configuration Issue Type
+      description: What type of configuration issue are you facing?
+      options:
+        - Initial setup and installation
+        - Redis connection configuration
+        - Cache configuration (TTL, stale, etc.)
+        - Auto-cache setup
+        - Key generation and patterns
+        - Transformer configuration
+        - Logger integration
+        - TypeScript types
+        - Integration with existing code
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-description
+    attributes:
+      label: Problem Description
+      description: Describe the configuration issue you're facing
+      placeholder: |
+        I'm trying to set up...
+        I'm getting an error when...
+        I can't figure out how to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-setup
+    attributes:
+      label: Current Setup
+      description: Show your current configuration and setup
+      placeholder: |
+        ```typescript
+        // Your current Prisma client setup
+        const prisma = new PrismaClient();
+        
+        // Your current cache configuration
+        const config: CacheConfig = {
+          // Your config here
+        };
+        
+        // Your Redis client setup
+        const client = {
+          // Your client config here
+        };
+        ```
+      render: typescript
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-message
+    attributes:
+      label: Error Message
+      description: If you're getting an error, paste it here
+      placeholder: |
+        ```
+        Error: ...
+        ```
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What should happen with your configuration?
+      placeholder: |
+        I expect that when I run...
+        The cache should...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What is actually happening?
+      placeholder: |
+        Instead, I'm seeing...
+        The cache is not...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-taken
+    attributes:
+      label: Steps Taken
+      description: What steps have you already tried to resolve this?
+      placeholder: |
+        1. I tried changing X to Y
+        2. I checked the documentation for...
+        3. I searched for similar issues...
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Please provide details about your environment
+      placeholder: |
+        - OS: [e.g., Ubuntu 22.04, macOS 13.0, Windows 11]
+        - Node.js version: [e.g., 18.17.0]
+        - Package manager: [e.g., npm, yarn, pnpm, bun]
+        - Database: [e.g., PostgreSQL, MySQL, SQLite]
+        - Redis setup: [e.g., Local, Docker, Cloud provider]
+
+  - type: textarea
+    id: prisma-schema
+    attributes:
+      label: Prisma Schema (if relevant)
+      description: If your issue is related to specific models, share your Prisma schema
+      placeholder: |
+        ```prisma
+        model User {
+          id        Int      @id
+          name      String
+          email     String   @unique
+          createdAt DateTime @default(now())
+        }
+        ```
+      render: prisma
+
+  - type: checkboxes
+    id: documentation-checked
+    attributes:
+      label: Documentation
+      description: Have you checked the documentation?
+      options:
+        - label: I have read the README.md
+        - label: I have checked the GitHub issues
+        - label: I have searched the existing discussions
+        - label: I have tried the examples in the repository
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Additional Context
+        Add any other context about the configuration issue here.

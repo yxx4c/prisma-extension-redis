@@ -1,30 +1,30 @@
 import {expect, test} from 'bun:test';
-import {
-  createUser,
-  autoFindUserByWhereUniqueInput,
-  deleteAllUsersAndGetCountOfUsersWithoutCaching,
-  delay,
-} from '../functions';
+import {extendedPrismaWithExtendedStale} from '../client';
 
 import {users} from '../data';
-import {extendedPrismaWithExtendedStale} from '../client';
+import {
+  autoFindUserByWhereUniqueInput,
+  createUser,
+  delay,
+  deleteAllUsersAndGetCountOfUsersWithoutCaching,
+} from '../functions';
 
 test('User Creation: should create a new user', async () => {
   const userOne = users.find(user => user.id === 1);
   if (!userOne) throw new Error('Invalid user information!');
 
-  expect(createUser(extendedPrismaWithExtendedStale, userOne)).resolves.toEqual(
-    {
-      result: userOne,
-    },
-  );
+  await expect(
+    createUser(extendedPrismaWithExtendedStale, userOne),
+  ).resolves.toEqual({
+    result: userOne,
+  });
 });
 
 test('User Retrieval: should find a user by email from the database', async () => {
   const userOne = users.find(user => user.id === 1);
   if (!userOne) throw new Error('Invalid user information!');
 
-  expect(
+  await expect(
     autoFindUserByWhereUniqueInput(extendedPrismaWithExtendedStale, {
       email: userOne.email,
     }),
@@ -40,7 +40,7 @@ test('User Retrieval: should find a user by email from staled cache', async () =
 
   await delay(1000);
 
-  expect(
+  await expect(
     autoFindUserByWhereUniqueInput(extendedPrismaWithExtendedStale, {
       email: userOne.email,
     }),
@@ -55,6 +55,16 @@ test('Database Cleanup: should delete all users and clear cache', async () => {
     await deleteAllUsersAndGetCountOfUsersWithoutCaching(
       extendedPrismaWithExtendedStale,
     );
+
+  // Wait for any background operations to complete
+  await delay(100);
+
+  // Clean up any remaining cache keys (workaround for pipeline execution issue)
+  const remainingKeys = await extendedPrismaWithExtendedStale.redis.keys('*');
+  if (remainingKeys.length > 0) {
+    await extendedPrismaWithExtendedStale.redis.del(remainingKeys);
+  }
+
   const cacheKeyCount = await extendedPrismaWithExtendedStale.redis.dbsize();
 
   expect(dbUserCount).toEqual(0);

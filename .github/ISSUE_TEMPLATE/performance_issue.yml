@@ -1,0 +1,207 @@
+name: ⚡ Performance Issue
+description: Report performance problems or optimization needs
+title: "[Performance]: "
+labels: ["performance", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a performance issue! Please provide detailed information about the performance problem to help us optimize the caching behavior.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version of prisma-extension-redis are you using?
+      placeholder: e.g., 3.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: prisma-version
+    attributes:
+      label: Prisma Version
+      description: What version of Prisma are you using?
+      placeholder: e.g., 5.7.0
+    validations:
+      required: true
+
+  - type: input
+    id: redis-version
+    attributes:
+      label: Redis/Dragonfly Version
+      description: What version of Redis or Dragonfly are you using?
+      placeholder: e.g., Redis 7.2.0 or Dragonfly 6.2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: performance-type
+    attributes:
+      label: Performance Issue Type
+      description: What type of performance issue are you experiencing?
+      options:
+        - Slow cache retrieval
+        - High memory usage
+        - Slow cache invalidation
+        - Slow key generation
+        - Redis connection issues
+        - Cache hit ratio problems
+        - Stale data issues
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: performance-description
+    attributes:
+      label: Performance Problem Description
+      description: Describe the performance issue you're experiencing
+      placeholder: |
+        The caching operation is taking X seconds when it should take Y seconds...
+        Memory usage is increasing by X MB per hour...
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-performance
+    attributes:
+      label: Current Performance Metrics
+      description: Provide specific performance measurements
+      placeholder: |
+        - Query execution time: X ms
+        - Cache hit ratio: X%
+        - Memory usage: X MB
+        - Redis response time: X ms
+        - Number of cached keys: X
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-performance
+    attributes:
+      label: Expected Performance
+      description: What performance level are you expecting?
+      placeholder: |
+        - Query execution time should be: X ms
+        - Cache hit ratio should be: X%
+        - Memory usage should be: X MB
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the performance issue
+      placeholder: |
+        1. Set up cache with configuration X
+        2. Execute query Y
+        3. Observe performance degradation
+    validations:
+      required: true
+
+  - type: textarea
+    id: code-example
+    attributes:
+      label: Code Example
+      description: Provide code that demonstrates the performance issue
+      placeholder: |
+        ```typescript
+        // Your code that shows the performance issue
+        const start = Date.now();
+        const result = await extendedPrisma.user.findMany({
+          where: { email: 'test@example.com' },
+          cache: true
+        });
+        console.log(`Query took ${Date.now() - start}ms`);
+        ```
+      render: typescript
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Cache Configuration
+      description: Please share your cache configuration
+      placeholder: |
+        ```typescript
+        const config: CacheConfig = {
+          ttl: 60,
+          stale: 30,
+          type: 'JSON',
+          auto: {
+            ttl: 30,
+            models: [...]
+          }
+        };
+        ```
+      render: typescript
+    validations:
+      required: true
+
+  - type: textarea
+    id: data-size
+    attributes:
+      label: Data Size Information
+      description: Provide information about your data size
+      placeholder: |
+        - Number of records in database: X
+        - Average record size: X bytes
+        - Number of concurrent users: X
+        - Peak query rate: X queries/second
+
+  - type: textarea
+    id: monitoring-logs
+    attributes:
+      label: Monitoring/Logs
+      description: If you have monitoring data or logs, please share relevant excerpts
+      placeholder: |
+        ```
+        [LOG] Cache miss for key: user:123
+        [LOG] Query execution time: 150ms
+        [LOG] Redis connection timeout after 5s
+        ```
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Provide details about your environment
+      placeholder: |
+        - OS: [e.g., Ubuntu 22.04, macOS 13.0, Windows 11]
+        - Node.js version: [e.g., 18.17.0]
+        - Memory: [e.g., 8GB RAM]
+        - CPU: [e.g., 4 cores]
+        - Redis memory limit: [e.g., 2GB]
+        - Network latency to Redis: [e.g., 1ms]
+
+  - type: checkboxes
+    id: optimization-attempts
+    attributes:
+      label: Optimization Attempts
+      description: What optimizations have you already tried?
+      options:
+        - label: Adjusted TTL values
+        - label: Changed cache type (JSON vs STRING)
+        - label: Modified cache key patterns
+        - label: Updated Redis configuration
+        - label: Changed auto-cache settings
+        - label: Implemented custom transformers
+        - label: None - this is a new issue
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Additional Context
+        Add any other context about the performance issue here.

@@ -9,7 +9,7 @@ export default defineConfig(({watch = false}) => ({
     index: 'src/index.ts',
   },
   external: [],
-  format: ['cjs', 'esm', 'iife'],
+  format: ['cjs', 'esm'],
   minify: isProduction,
   sourcemap: isProduction,
   watch,
