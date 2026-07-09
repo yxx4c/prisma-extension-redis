@@ -88,6 +88,17 @@
   "publishConfig": {
     "access": "public"
   },
+  "overrides": {
+    "handlebars": "^4.7.9",
+    "lodash": "^4.17.23",
+    "lodash-es": "^4.17.23",
+    "js-yaml": "^4.1.1",
+    "@hono/node-server": "^1.19.13",
+    "rollup": "^4.59.0",
+    "brace-expansion": "^2.0.3",
+    "@isaacs/brace-expansion": "^5.0.1",
+    "esbuild": "^0.28.1"
+  },
   "peerDependencies": {
     "@prisma/client": "^7.2.0"
   },
