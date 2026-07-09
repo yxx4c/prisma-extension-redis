@@ -51,9 +51,6 @@
     },
     "./package.json": "./package.json"
   },
-  "typesVersions": {
-    "*": {}
-  },
   "files": [
     "dist/**/*",
     "package.json",
@@ -63,7 +60,6 @@
   ],
   "scripts": {
     "build": "tsup",
-    "biome": "biome",
     "dev": "tsup --watch",
     "test": "bun test",
     "check": "biome check",
@@ -76,6 +72,8 @@
   },
   "devDependencies": {
     "@amanda-mitchell/semantic-release-npm-multiple": "^3.17.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "@biomejs/biome": "^2.5.3",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
@@ -90,9 +88,10 @@
   "publishConfig": {
     "access": "public"
   },
+  "peerDependencies": {
+    "@prisma/client": "^7.2.0"
+  },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
     "iovalkey": "^0.3.3",
     "object-code": "^2.0.0",
     "promise-coalesce": "^1.5.0"
