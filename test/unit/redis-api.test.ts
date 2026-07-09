@@ -143,9 +143,7 @@ describe('Upstash-style client support', () => {
     const api = fromUpstashLike(fake as UpstashLike);
 
     await api.jsonSet('key', JSON.stringify({a: 1}), 60);
-    expect(fake.calls).toEqual(
-      expect.arrayContaining(['json.set', 'expire']),
-    );
+    expect(fake.calls).toEqual(expect.arrayContaining(['json.set', 'expire']));
     expect(fake.store.get('key')).toBe(JSON.stringify({a: 1}));
 
     fake.calls.length = 0;
@@ -161,9 +159,9 @@ describe('Upstash-style client support', () => {
     withUnlink.store.set('a', '1');
     withoutUnlink.store.set('a', '1');
 
-    expect(
-      await fromUpstashLike(withUnlink as UpstashLike).unlink(['a']),
-    ).toBe(1);
+    expect(await fromUpstashLike(withUnlink as UpstashLike).unlink(['a'])).toBe(
+      1,
+    );
     expect(withUnlink.calls).toContain('unlink');
 
     expect(
@@ -290,7 +288,9 @@ describe('Upstash-style client support', () => {
 
 describe('resolveRedisApi options-object input', () => {
   test('plain options objects construct an iovalkey client', async () => {
-    const uri = new URL(process.env.REDIS_SERVICE_URI ?? 'redis://localhost:6379');
+    const uri = new URL(
+      process.env.REDIS_SERVICE_URI ?? 'redis://localhost:6379',
+    );
     const {api, raw} = resolveRedisApi({
       host: uri.hostname,
       port: Number(uri.port || 6379),
