@@ -141,7 +141,12 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
        * @returns Cache statistics including total keys, keys by model, and estimated size
        */
       getCacheStats: () =>
-        getCacheStats(api, configuredPrefix, configuredDelimiter),
+        getCacheStats(
+          api,
+          configuredPrefix,
+          configuredDelimiter,
+          caseTransformer,
+        ),
 
       /**
        * Clean up cache keys for models that no longer exist in the schema.
@@ -155,6 +160,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
           validModels,
           prefix: configuredPrefix,
           delimiter: configuredDelimiter,
+          caseTransformer,
           ...opts,
         }),
 
@@ -170,6 +176,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
           model,
           prefix: configuredPrefix,
           delimiter: configuredDelimiter,
+          caseTransformer,
           ...opts,
         }),
 

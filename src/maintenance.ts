@@ -1,3 +1,4 @@
+import {snakeCase} from './cacheKey';
 import {
   DEFAULT_CHUNK_SIZE,
   DEFAULT_DELIMITER,
@@ -6,6 +7,7 @@ import {
   ESTIMATED_VALUE_SIZE_BYTES,
 } from './constants';
 import {type RedisClientInput, resolveRedisApi} from './redisApi';
+import type {caseTransformer} from './types';
 
 /**
  * Options for the orphaned key cleanup operation.
@@ -25,6 +27,11 @@ export interface CleanupOptions {
   batchSize?: number;
   /** Progress callback */
   onProgress?: (scanned: number, orphaned: number) => void;
+  /**
+   * Case transformer the keys were written with (default: snakeCase,
+   * matching getKeyGen). Must match the extension's cacheKey config
+   */
+  caseTransformer?: caseTransformer;
 }
 
 /**
@@ -75,16 +82,21 @@ export const cleanupOrphanedKeys = async ({
   dryRun = false,
   batchSize = DEFAULT_CHUNK_SIZE,
   onProgress,
+  caseTransformer: transform = snakeCase,
 }: CleanupOptions): Promise<CleanupResult> => {
   const {api} = resolveRedisApi(redis);
   const startTime = Date.now();
-  const pattern = `${prefix}${delimiter}*`;
+  // getKeyGen case-transforms the prefix and model segments, so patterns
+  // must be built with the same transformer to match stored keys
+  const pattern = `${transform(prefix)}${delimiter}*`;
   const orphanedKeys: string[] = [];
   let scannedKeys = 0;
 
-  // Normalize model names to lowercase for case-insensitive comparison
+  // Normalize to lowercase on both sides for case-insensitive comparison
   const validModelPatterns = new Set(
-    validModels.map(model => `${prefix}${delimiter}${model.toLowerCase()}`),
+    validModels.map(model =>
+      `${transform(prefix)}${delimiter}${transform(model)}`.toLowerCase(),
+    ),
   );
 
   const deleteBuffer: string[] = [];
@@ -164,9 +176,10 @@ export const getCacheStats = async (
   redis: RedisClientInput,
   prefix = DEFAULT_PREFIX,
   delimiter = DEFAULT_DELIMITER,
+  transform: caseTransformer = snakeCase,
 ): Promise<CacheStats> => {
   const {api} = resolveRedisApi(redis);
-  const pattern = `${prefix}${delimiter}*`;
+  const pattern = `${transform(prefix)}${delimiter}*`;
   const keysByModel: Record<string, number> = {};
   let totalKeys = 0;
   let estimatedSizeBytes = 0;
@@ -204,6 +217,11 @@ export interface FlushModelOptions {
   delimiter?: string;
   /** Batch size for delete operations (default: 1000) */
   batchSize?: number;
+  /**
+   * Case transformer the keys were written with (default: snakeCase,
+   * matching getKeyGen). Must match the extension's cacheKey config
+   */
+  caseTransformer?: caseTransformer;
 }
 
 /**
@@ -226,6 +244,7 @@ export const flushModelCache = async ({
   prefix = DEFAULT_PREFIX,
   delimiter = DEFAULT_DELIMITER,
   batchSize = DEFAULT_CHUNK_SIZE,
+  caseTransformer: transform = snakeCase,
 }: FlushModelOptions): Promise<{deletedCount: number; durationMs: number}> => {
   // Validate model name to prevent injection of Redis wildcards
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(model)) {
@@ -236,7 +255,8 @@ export const flushModelCache = async ({
 
   const {api} = resolveRedisApi(redis);
   const startTime = Date.now();
-  const pattern = `${prefix}${delimiter}${model.toLowerCase()}${delimiter}*`;
+  // Same transformer the key generator applied when writing
+  const pattern = `${transform(prefix)}${delimiter}${transform(model)}${delimiter}*`;
 
   const buffer: string[] = [];
   const deletePromises: Promise<number>[] = [];
