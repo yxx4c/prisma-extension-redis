@@ -3,11 +3,13 @@ import type Redis from 'iovalkey';
 import {getAutoKeyGen, getKeyGen, getKeyPatternGen} from './cacheKey';
 import {
   autoCacheAction,
+  cache,
   customCacheAction,
   customUncacheAction,
   isAutoCacheEnabled,
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
+  uncache,
 } from './cacheUncache';
 import type {WarmOptions, WarmQuery} from './cacheWarmer';
 import {createCacheWarmer} from './cacheWarmer';
@@ -22,9 +24,11 @@ import {
 } from './maintenance';
 import {getServerClock, resolveRedisApi} from './redisApi';
 import type {
+  CacheParams,
   ExtendedModel,
   NonCachedMetaResult,
   PrismaExtensionRedisOptions,
+  UncacheParams,
 } from './types';
 import {validateConfig} from './validation';
 
@@ -167,6 +171,49 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
           prefix: configuredPrefix,
           delimiter: configuredDelimiter,
           ...opts,
+        }),
+
+      /**
+       * Write a value to the cache directly, without a database
+       * operation. The entry uses the same envelope cached reads
+       * consume, so auto and custom cached queries serve it until it
+       * expires after ttl + stale seconds.
+       * @param options - Key, value, and optional ttl/stale overrides
+       * @returns The entry's cachedAt/expiresAt/staleUntil timestamps
+       * @example
+       * ```typescript
+       * await prisma.cache({key: 'prisma:user:id:1', value: user, ttl: 60});
+       * ```
+       */
+      cache: (options: Omit<CacheParams, 'redis' | 'config' | 'clock'>) =>
+        cache({redis: api, config, clock, ...options}),
+
+      /**
+       * Delete cache entries directly, without a database operation.
+       * Exact keys are removed immediately; when hasPattern is true,
+       * keys containing glob characters (* or ?) are expanded with SCAN
+       * while the remaining exact keys are still removed directly.
+       * @param options - Keys or patterns to remove
+       * @returns The number of cache entries deleted
+       * @example
+       * ```typescript
+       * const {deleted} = await prisma.uncache({
+       *   uncacheKeys: ['prisma:user:id:1', 'prisma:post:*'],
+       *   hasPattern: true,
+       * });
+       * ```
+       */
+      uncache: (
+        options: Omit<
+          UncacheParams,
+          'redis' | 'chunkSize' | 'maxConcurrentBatches'
+        >,
+      ) =>
+        uncache({
+          redis: api,
+          chunkSize: config.chunkSize,
+          maxConcurrentBatches: config.maxConcurrentBatches,
+          ...options,
         }),
 
       /**
