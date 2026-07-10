@@ -78,6 +78,7 @@ export interface UpstashLike {
     set(key: string, path: string, value: unknown): Promise<unknown>;
   };
   expire(key: string, seconds: number): Promise<unknown>;
+  persist?(key: string): Promise<unknown>;
   del(...keys: string[]): Promise<number>;
   unlink?(...keys: string[]): Promise<number>;
   scan(
@@ -136,7 +137,10 @@ export const fromIoValkeyLike = (client: IoValkeyLike): RedisApi => ({
   jsonGet: key => client.call('JSON.GET', key) as Promise<string | null>,
   jsonSet: (key, value, ttl) => {
     const multi = client.multi().call('JSON.SET', key, '$', value);
+    // SET without TTL clears a previous expiry; JSON.SET preserves it,
+    // so PERSIST keeps both write paths on the same contract
     if (hasTtl(ttl)) multi.call('EXPIRE', key, ttl);
+    else multi.call('PERSIST', key);
     return execOrThrow(multi);
   },
   del: keys => (keys.length ? client.del(...keys) : Promise.resolve(0)),
@@ -180,6 +184,7 @@ export const fromUpstashLike = (client: UpstashLike): RedisApi => ({
   jsonSet: async (key, value, ttl) => {
     await client.json.set(key, '$', JSON.parse(value));
     if (hasTtl(ttl)) await client.expire(key, ttl);
+    else if (client.persist) await client.persist(key);
   },
   del: keys => (keys.length ? client.del(...keys) : Promise.resolve(0)),
   unlink: keys =>
@@ -271,9 +276,24 @@ export const resolveRedisApi = (
       return {api, raw: client};
     }
 
-    // An object exposing functions is a (mis-shaped) client, not
-    // connection options - fail loudly instead of trying to connect
-    if (Object.values(client).some(isFunction)) {
+    // An object exposing client verbs is a (mis-shaped) client, not
+    // connection options - fail loudly instead of trying to connect.
+    // Plain options legitimately carry function fields (retryStrategy,
+    // reconnectOnError), so only Redis-verb functions count
+    const verbs = [
+      'get',
+      'set',
+      'del',
+      'unlink',
+      'scan',
+      'ping',
+      'call',
+      'multi',
+      'jsonGet',
+      'jsonSet',
+    ] as const;
+    const record = client as Record<string, unknown>;
+    if (verbs.some(verb => isFunction(record[verb]))) {
       throw new TypeError(
         'Unrecognized Redis client: implement the RedisApi interface, or pass an ioredis-compatible instance, an Upstash-style client, or iovalkey connection options.',
       );

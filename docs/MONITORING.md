@@ -4,6 +4,8 @@ This document covers all monitoring features in prisma-extension-redis, includin
 
 ## Event Hooks
 
+> **Note on cache keys in logs and callbacks**: keys frequently embed identifiers from query arguments (emails, user IDs). Anything that receives keys — `onHit`/`onMiss` callbacks, `debug` logging, telemetry sinks — should be treated as handling potentially sensitive data.
+
 Event hooks provide real-time notifications for cache operations.
 
 ### Available Hooks
@@ -269,7 +271,7 @@ console.log(health);
 | Status | Description |
 |--------|-------------|
 | `'healthy'` | Redis is connected and responding quickly |
-| `'degraded'` | Redis is connected but response is slow (>100ms) |
+| `'degraded'` | Redis is connected but response is slow (>1000ms) |
 | `'unhealthy'` | Redis is not connected or not responding |
 
 ### Using the Health Check Function Directly

@@ -318,7 +318,7 @@ Also available as a standalone import: `import { cache } from 'prisma-extension-
 ### 3. **Cache Key Management**
 
 - **`getKey`**: Generates a unique key for caching queries from provided key context parameters.
-- **`getAutoKey`**: Generates a unique key for auto-caching queries, based on query parameters.
+- **`getAutoKey`**: Generates a unique key for auto-caching queries, based on query parameters. Argument hashes carry ~52 bits of entropy, so collisions within one model and operation stay astronomically unlikely below tens of millions of distinct cached queries.
 - **`getKeyPattern`**: Creates patterns for more complex invalidation scenarios, using wildcards.
 
 ---

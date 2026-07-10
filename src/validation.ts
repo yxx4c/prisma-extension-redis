@@ -41,6 +41,12 @@ export const validateConfig = (config: CacheConfig): void => {
     throw new ValidationError('stale must be a non-negative number');
   }
 
+  if (config.ttl === 0 && config.stale === 0) {
+    throw new ValidationError(
+      'ttl and stale cannot both be zero; the entry would never be servable',
+    );
+  }
+
   if (config.type && !['JSON', 'STRING'].includes(config.type)) {
     throw new ValidationError('type must be "JSON" or "STRING"');
   }
@@ -136,6 +142,12 @@ export const validateCacheOptions = (options: CacheOptions): void => {
 
     if (options.stale < 0) {
       throw new ValidationError('stale must be a non-negative number');
+    }
+
+    if (options.ttl === 0 && options.stale === 0) {
+      throw new ValidationError(
+        'ttl and stale cannot both be zero; the entry would never be servable',
+      );
     }
   }
 };

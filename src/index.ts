@@ -65,8 +65,11 @@ export {
 } from './redisApi';
 export type {
   AutoCacheConfig,
+  CacheAutoKeyParams,
   CacheConfig,
   CacheErrors,
+  CacheKeyParams,
+  CacheKeyPatternParams,
   CacheOptions,
   CacheParams,
   CacheSource,

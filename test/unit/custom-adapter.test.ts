@@ -205,6 +205,40 @@ describe('Custom RedisApi adapter (client-agnostic end-to-end)', () => {
     expect(excludedByOmission.store.size).toBe(0);
   });
 
+  test('updateManyAndReturn supports uncache and stray uncache args are stripped', async () => {
+    const key = prisma.getKey({params: [{prisma: 'User'}, {umar: '1'}]});
+    await prisma.cache({key, value: {planted: true}});
+    expect(fakeRedis.store.has(key)).toBe(true);
+
+    const rows = await prisma.user.updateManyAndReturn({
+      where: {email: userOne.email},
+      data: {name: userOne.name},
+      uncache: {uncacheKeys: [key]},
+    });
+    expect(Array.isArray(rows)).toBe(true);
+    expect(fakeRedis.store.has(key)).toBe(false);
+
+    const aggregated = await prisma.user.aggregate({
+      _count: true,
+      uncache: {uncacheKeys: ['ignored']},
+    } as never);
+    expect(aggregated._count).toBeGreaterThanOrEqual(0);
+  });
+
+  test('prisma.uncache accepts per-call batching overrides', async () => {
+    const key = prisma.getKey({params: [{prisma: 'User'}, {batched: '1'}]});
+    await prisma.cache({key, value: 1});
+
+    const {deleted} = await prisma.uncache({
+      uncacheKeys: [`${key}*`],
+      hasPattern: true,
+      chunkSize: 1,
+      maxConcurrentBatches: 1,
+    });
+
+    expect(deleted).toBe(1);
+  });
+
   test('health check works without INFO support', async () => {
     const health = await prisma.healthCheck();
     expect(health.status).toBe('healthy');

@@ -29,8 +29,38 @@ import {validateCacheOptions} from './validation';
 /**
  * Tracks in-flight background refresh operations to prevent duplicate
  * database queries when multiple concurrent requests hit stale cache.
+ * Scoped per resolved client so identical key strings on different
+ * clients (or extension instances) never contaminate each other.
  */
-const backgroundRefreshes = new Map<string, Promise<void>>();
+const backgroundRefreshScopes = new WeakMap<
+  RedisApi,
+  Map<string, Promise<void>>
+>();
+
+const backgroundRefreshesFor = (api: RedisApi): Map<string, Promise<void>> => {
+  let scope = backgroundRefreshScopes.get(api);
+  if (!scope) {
+    scope = new Map();
+    backgroundRefreshScopes.set(api, scope);
+  }
+  return scope;
+};
+
+/**
+ * In-flight read coalescing, scoped per resolved client for the same
+ * reason; the map key additionally carries the cache type so JSON and
+ * STRING envelopes for one key never share an execution.
+ */
+const coalesceScopes = new WeakMap<RedisApi, Map<string, Promise<unknown>>>();
+
+const coalesceScopeFor = (api: RedisApi): Map<string, Promise<unknown>> => {
+  let scope = coalesceScopes.get(api);
+  if (!scope) {
+    scope = new Map();
+    coalesceScopes.set(api, scope);
+  }
+  return scope;
+};
 
 export const filterOperations =
   <T extends Operation[]>(...ops: T) =>
@@ -67,19 +97,25 @@ export const unlinkPatterns = ({
         : Promise.resolve();
     };
 
-    let cursor = '0';
-    do {
-      const page = await api.scan(cursor, pattern, chunkSize);
-      cursor = page.cursor;
-      buffer.push(...page.keys);
-      while (buffer.length >= chunkSize) {
-        await execBatch(buffer.splice(0, chunkSize));
-      }
-    } while (cursor !== '0');
+    try {
+      let cursor = '0';
+      do {
+        const page = await api.scan(cursor, pattern, chunkSize);
+        cursor = page.cursor;
+        buffer.push(...page.keys);
+        while (buffer.length >= chunkSize) {
+          await execBatch(buffer.splice(0, chunkSize));
+        }
+      } while (cursor !== '0');
 
-    if (buffer.length) await execBatch(buffer.splice(0, buffer.length));
-    const counts = await Promise.all(allBatches);
-    return counts.reduce((sum, count) => sum + count, 0);
+      if (buffer.length) await execBatch(buffer.splice(0, buffer.length));
+      const counts = await Promise.all(allBatches);
+      return counts.reduce((sum, count) => sum + count, 0);
+    } catch (error) {
+      // Drain in-flight batches so none reject unobserved
+      await Promise.allSettled(allBatches);
+      throw error;
+    }
   });
 };
 
@@ -385,7 +421,8 @@ export const getCache = async ({
         staleWindow: cacheStale,
       });
       // Use a unique key to track this specific background refresh
-      const refreshKey = `refresh:${key}`;
+      const backgroundRefreshes = backgroundRefreshesFor(api);
+      const refreshKey = `${type}\u0000${key}`;
 
       // Only start a background refresh if one isn't already in flight
       // This prevents duplicate DB queries when multiple concurrent requests
@@ -438,11 +475,17 @@ export const getCache = async ({
  * Wraps getCache with promise coalescing to prevent duplicate database
  * queries when multiple identical requests arrive simultaneously.
  */
-export const promiseCoalesceGetCache = ({
-  key,
-  ...rest
-}: GetDataParams): Promise<InternalCacheResult> =>
-  coalesce(key, () => getCache({key, ...rest}));
+export const promiseCoalesceGetCache = (
+  params: GetDataParams,
+): Promise<InternalCacheResult> => {
+  const {api} = resolveRedisApi(params.redis);
+  const scope = coalesceScopeFor(api);
+  return coalesce(
+    `${params.config.type}\u0000${params.key}`,
+    () => getCache(params),
+    scope,
+  ) as Promise<InternalCacheResult>;
+};
 
 /**
  * Handles auto-caching for Prisma operations based on configuration.

@@ -78,9 +78,9 @@ const { result, meta } = await prisma.user.findUnique({
   meta: true,
 });
 
-// Force refresh the cache
-const freshData = await meta.recache();
-console.log('Cache refreshed with:', freshData);
+// Force refresh the cache (returns the same {result, meta} shape)
+const {result: freshData, meta: freshMeta} = await meta.recache();
+console.log('Cache refreshed with:', freshData, 'at', freshMeta.cachedAt);
 ```
 
 ### Delete from Cache

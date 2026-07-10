@@ -44,7 +44,9 @@ Notes:
 - **`type: 'JSON'` requires RedisJSON** on the server, exactly as with the built-in client. If your store has no JSON module, use `type: 'STRING'` and implement `jsonGet`/`jsonSet` as aliases of `get`/`set` (they will not be called).
 - **`time` is optional but recommended.** With it, the extension syncs a server-time offset at most every 5 seconds and stamps all cache entries with server-consistent timestamps while reads stay a single `GET`. Without it, the local clock is used. Sync failures are surfaced through `config.onError` and debug logging.
 - **`info` is optional.** When absent (e.g. Upstash REST), `healthCheck()` still works; `serverInfo` is simply `undefined`.
-- **Connection lifecycle is yours** when you pass an instance or adapter. The extension never calls `quit`/`disconnect`. The client you supplied is exposed as `prisma.redis` for direct access.
+- **Writes without a TTL persist the key**: when `set`/`jsonSet` receive no `ttlSeconds`, any previous expiry on the key is removed (the built-in adapters issue `PERSIST` for the JSON path; Upstash clients use `persist` when available).
+- **Upstash TTLs are applied non-atomically** for the JSON type (`json.set` then `expire` over REST); a failure between the two can leave a value without its expiry.
+- **Connection lifecycle is yours** when you pass an instance or adapter. The extension never calls `quit`/`disconnect`, and when you pass connection options instead, the constructed iovalkey client connects at initialization and lives for the process. The client you supplied is exposed as `prisma.redis` for direct access.
 
 ## Example: @upstash/redis
 

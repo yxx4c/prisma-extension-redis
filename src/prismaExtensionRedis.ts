@@ -203,12 +203,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
        * });
        * ```
        */
-      uncache: (
-        options: Omit<
-          UncacheParams,
-          'redis' | 'chunkSize' | 'maxConcurrentBatches'
-        >,
-      ) =>
+      uncache: (options: Omit<UncacheParams, 'redis'>) =>
         uncache({
           redis: api,
           chunkSize: config.chunkSize,
@@ -287,6 +282,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
               ...args,
               cache: undefined,
               meta: undefined,
+              uncache: undefined,
             });
 
           // recache re-runs the query; uncache is a no-op because nothing

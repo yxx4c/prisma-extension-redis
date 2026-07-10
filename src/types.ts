@@ -33,6 +33,7 @@ export const ALL_OPERATIONS = [
   'groupBy',
   'update',
   'updateMany',
+  'updateManyAndReturn',
   'upsert',
 ] as const satisfies ReadonlyArray<Operation>;
 
@@ -98,6 +99,7 @@ export const UNCACHE_OPTIONAL_ARG_OPERATIONS = [
   'createManyAndReturn',
   'deleteMany',
   'updateMany',
+  'updateManyAndReturn',
 ] as const satisfies ReadonlyArray<Operation>;
 
 export const UNCACHE_OPERATIONS = [

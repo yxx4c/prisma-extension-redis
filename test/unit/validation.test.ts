@@ -3,6 +3,18 @@ import {ValidationError} from '../../src';
 import {validateCacheOptions, validateConfig} from '../../src/validation';
 
 describe('validateConfig', () => {
+  test('should throw ValidationError when ttl and stale are both zero', () => {
+    expect(() =>
+      validateConfig({ttl: 0, stale: 0, type: 'JSON', auto: true}),
+    ).toThrow(ValidationError);
+  });
+
+  test('should accept ttl zero with a positive stale window', () => {
+    expect(() =>
+      validateConfig({ttl: 0, stale: 30, type: 'JSON', auto: true}),
+    ).not.toThrow();
+  });
+
   test('should pass with valid configuration', () => {
     expect(() =>
       validateConfig({
@@ -207,10 +219,10 @@ describe('validateConfig', () => {
     ).toThrow('auto.models[User].stale must be a non-negative number');
   });
 
-  test('should allow zero values for ttl and stale', () => {
+  test('should allow zero for either ttl or stale when the other is positive', () => {
     expect(() =>
       validateConfig({
-        ttl: 0,
+        ttl: 60,
         stale: 0,
         type: 'JSON',
         auto: true,
@@ -231,6 +243,12 @@ describe('validateConfig', () => {
 });
 
 describe('validateCacheOptions', () => {
+  test('should throw ValidationError when ttl and stale are both zero', () => {
+    expect(() => validateCacheOptions({key: 'k', ttl: 0, stale: 0})).toThrow(
+      ValidationError,
+    );
+  });
+
   test('should pass with valid cache options', () => {
     expect(() =>
       validateCacheOptions({
