@@ -1,9 +1,11 @@
 export type {Redis, RedisOptions} from 'iovalkey';
 export {getKeyGen, getKeyPatternGen} from './cacheKey';
 export {
+  cache,
   filterOperations,
   getCache,
   promiseCoalesceGetCache,
+  uncache,
   unlinkPatterns,
 } from './cacheUncache';
 export type {WarmOptions, WarmQuery, WarmResult} from './cacheWarmer';
@@ -66,10 +68,12 @@ export type {
   CacheConfig,
   CacheErrors,
   CacheOptions,
+  CacheParams,
   CacheSource,
   Meta,
   NonCachedMetaResult,
   ResultWithMeta,
   UncacheOptions,
+  UncacheParams,
 } from './types';
 export {ValidationError} from './validation';

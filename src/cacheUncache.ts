@@ -1,5 +1,6 @@
 import type {JsArgs, Operation} from '@prisma/client/runtime/client';
 import type {getAutoKeyGen} from './cacheKey';
+import {globCheck} from './cacheKey';
 import {coalesce} from './coalesce';
 import {DEFAULT_CHUNK_SIZE, DEFAULT_MAX_CONCURRENT_BATCHES} from './constants';
 import {createDebugLogger, noopLogger} from './debug';
@@ -13,6 +14,7 @@ import {
   type CacheContext,
   type CacheErrors,
   type CacheOptions,
+  type CacheParams,
   type CacheSource,
   type CacheType,
   type DeletePatterns,
@@ -20,6 +22,7 @@ import {
   type InternalCacheResult,
   UNCACHE_OPERATIONS,
   type UncacheOptions,
+  type UncacheParams,
 } from './types';
 import {validateCacheOptions} from './validation';
 
@@ -39,7 +42,8 @@ export const filterOperations =
  * Uses batching to handle large numbers of keys efficiently.
  *
  * @param params - The deletion parameters
- * @returns Array of promises that resolve when deletion is complete
+ * @returns Array of promises that resolve, per pattern, with the number
+ * of keys deleted
  */
 export const unlinkPatterns = ({
   patterns,
@@ -51,10 +55,13 @@ export const unlinkPatterns = ({
 
   return patterns.map(async pattern => {
     const buffer: string[] = [];
+    const allBatches: Promise<number>[] = [];
     const activeBatches: Promise<number>[] = [];
 
     const execBatch = (keys: string[]): Promise<unknown> => {
-      activeBatches.push(api.unlink(keys));
+      const batch = api.unlink(keys);
+      allBatches.push(batch);
+      activeBatches.push(batch);
       return activeBatches.length >= maxConcurrentBatches
         ? (activeBatches.shift() as Promise<number>)
         : Promise.resolve();
@@ -71,9 +78,40 @@ export const unlinkPatterns = ({
     } while (cursor !== '0');
 
     if (buffer.length) await execBatch(buffer.splice(0, buffer.length));
-    await Promise.all(activeBatches);
-    return true;
+    const counts = await Promise.all(allBatches);
+    return counts.reduce((sum, count) => sum + count, 0);
   });
+};
+
+/**
+ * Deletes cache entries directly, without an accompanying database
+ * operation. Exact keys are removed with UNLINK; when hasPattern is
+ * true, keys containing glob characters (* or ?) are expanded with
+ * SCAN while the remaining exact keys are still removed directly.
+ *
+ * @param params - The deletion parameters
+ * @returns Promise resolving with the number of cache entries deleted
+ */
+export const uncache = async ({
+  redis,
+  uncacheKeys,
+  hasPattern = false,
+  chunkSize,
+  maxConcurrentBatches,
+}: UncacheParams): Promise<{deleted: number}> => {
+  const {api} = resolveRedisApi(redis);
+
+  const patterns = hasPattern ? uncacheKeys.filter(globCheck) : [];
+  const exactKeys = hasPattern
+    ? uncacheKeys.filter(key => !globCheck(key))
+    : uncacheKeys;
+
+  const counts = await Promise.all([
+    exactKeys.length ? api.unlink(exactKeys) : Promise.resolve(0),
+    ...unlinkPatterns({redis: api, patterns, chunkSize, maxConcurrentBatches}),
+  ]);
+
+  return {deleted: counts.reduce((sum, count) => sum + count, 0)};
 };
 
 type CacheCommandSet = {
@@ -102,6 +140,65 @@ const commands: Record<CacheType, CacheCommandSet> = {
  */
 const toError = (err: unknown): Error =>
   err instanceof Error ? err : new Error(String(err));
+
+/**
+ * Writes a value to the cache directly, without an accompanying
+ * database operation. The entry uses the same envelope cached reads
+ * consume: the configured serializer, a server-synced timestamp, and a
+ * Redis lifetime of ttl + stale seconds.
+ *
+ * @param params - The cache write parameters
+ * @returns Promise resolving with the entry's timestamp window
+ */
+export const cache = async ({
+  redis,
+  key,
+  value,
+  config,
+  ttl,
+  stale,
+  clock,
+}: CacheParams): Promise<{
+  cachedAt: number;
+  expiresAt: number;
+  staleUntil: number;
+}> => {
+  const {transformer, type} = config;
+
+  if (!commands[type])
+    throw new Error(
+      'Incorrect CacheType provided! Supported values: JSON | STRING',
+    );
+
+  const effectiveTtl = ttl ?? config.ttl;
+  const effectiveStale = stale ?? config.stale;
+  validateCacheOptions({key, ttl: effectiveTtl, stale: effectiveStale});
+
+  const {api} = resolveRedisApi(redis);
+  const serverClock = clock ?? getServerClock(api);
+  const cachedAt = serverClock.nowSeconds();
+
+  const cacheContext: CacheContext = {
+    isCached: true,
+    result: value,
+    stale: effectiveStale,
+    timestamp: cachedAt,
+    ttl: effectiveTtl,
+  };
+
+  await commands[type].set(
+    api,
+    key,
+    (transformer?.serialize || JSON.stringify)(cacheContext),
+    effectiveTtl + effectiveStale,
+  );
+
+  return {
+    cachedAt,
+    expiresAt: cachedAt + effectiveTtl,
+    staleUntil: cachedAt + effectiveTtl + effectiveStale,
+  };
+};
 
 /**
  * Retrieves data from cache or database with stale-while-revalidate support.
@@ -211,25 +308,21 @@ export const getCache = async ({
    * server time at write time. Returns the stamped timestamp.
    */
   const writeCache = async (result: unknown): Promise<number> => {
-    const cachedAt = serverClock.nowSeconds();
-    const newCacheContext: CacheContext = {
-      isCached: true,
-      result,
-      stale,
-      timestamp: cachedAt,
-      ttl,
-    };
     try {
-      await command.set(
-        api,
+      const {cachedAt} = await cache({
+        redis: api,
         key,
-        (transformer?.serialize || JSON.stringify)(newCacheContext),
-        ttl + stale,
-      );
+        value: result,
+        config,
+        ttl,
+        stale,
+        clock: serverClock,
+      });
+      return cachedAt;
     } catch (writeError) {
       reportError('cacheWrite', writeError, `Cache write error`);
+      return serverClock.nowSeconds();
     }
-    return cachedAt;
   };
 
   const queryAndCache = async (): Promise<InternalCacheResult> => {
@@ -432,24 +525,14 @@ export const customUncacheAction = async ({
   config,
 }: ActionParams) => {
   const {uncacheKeys, hasPattern} = args.uncache as unknown as UncacheOptions;
-  const {api} = resolveRedisApi(redis);
 
-  if (hasPattern) {
-    // Check if any key contains wildcard characters (* or ?)
-    const hasWildcards = uncacheKeys.some(
-      key => key.includes('*') || key.includes('?'),
-    );
-
-    if (hasWildcards) {
-      // Use Redis SCAN with MATCH for pattern-based deletion
-      const unlinkPromises = unlinkPatterns({
-        redis,
-        patterns: uncacheKeys,
-        chunkSize: config.chunkSize,
-      });
-      await Promise.all(unlinkPromises);
-    } else await api.del(uncacheKeys);
-  } else await api.del(uncacheKeys);
+  await uncache({
+    redis,
+    uncacheKeys,
+    hasPattern,
+    chunkSize: config.chunkSize,
+    maxConcurrentBatches: config.maxConcurrentBatches,
+  });
 
   // Uncache operations should always return the plain Prisma result
   return await query({...args, uncache: undefined, meta: undefined});
@@ -469,6 +552,7 @@ export const isAutoCacheEnabled = ({
       filterOperations(...AUTO_OPERATIONS)(auto.excludedOperations).includes(
         operation as autoOperations,
       ) &&
+      (!auto.includedModels || auto.includedModels.includes(model)) &&
       !auto.excludedModels?.includes(model) &&
       !auto.models
         ?.find(m => m.model === model)

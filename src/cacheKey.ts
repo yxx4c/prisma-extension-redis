@@ -8,7 +8,7 @@ import type {
 
 const globCheckRegex = /[*?]/;
 
-const globCheck = (s: string) => globCheckRegex.test(s);
+export const globCheck = (s: string) => globCheckRegex.test(s);
 
 /**
  * Creates a function that generates cache keys from query parameters.

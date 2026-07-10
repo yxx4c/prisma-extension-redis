@@ -116,6 +116,46 @@ describe('Custom RedisApi adapter (client-agnostic end-to-end)', () => {
     ).toHaveLength(0);
   });
 
+  test('prisma.uncache removes entries directly without a database operation', async () => {
+    const exactKey = prisma.getKey({
+      params: [{prisma: 'User'}, {direct: '1'}],
+    });
+    await prisma.user.findUnique({
+      where: {email: userOne.email},
+      cache: {key: exactKey, ttl: 60},
+    });
+    await prisma.user.findUnique({where: {email: userOne.email}});
+    expect(fakeRedis.store.has(exactKey)).toBe(true);
+
+    const {deleted} = await prisma.uncache({
+      uncacheKeys: [exactKey, 'adapter_e2e:user*'],
+      hasPattern: true,
+    });
+
+    expect(deleted).toBeGreaterThanOrEqual(2);
+    expect(fakeRedis.store.has(exactKey)).toBe(false);
+    expect(
+      [...fakeRedis.store.keys()].filter(key => key.startsWith('adapter_e2e')),
+    ).toHaveLength(0);
+  });
+
+  test('prisma.cache plants values served without a database round trip', async () => {
+    const key = prisma.getKey({params: [{prisma: 'User'}, {planted: '1'}]});
+    const planted = {id: 999, name: 'from-cache-only', email: 'planted@x.y'};
+
+    const stamped = await prisma.cache({key, value: planted});
+    expect(stamped.staleUntil).toBe(stamped.cachedAt + 60 + 30);
+
+    const read = await prisma.user.findUnique({
+      where: {email: userOne.email},
+      cache: {key},
+      meta: true,
+    });
+
+    expect(read.meta.source).toBe('cache');
+    expect(read.result).toEqual(planted);
+  });
+
   test('maintenance utilities run against the custom client', async () => {
     await prisma.user.findUnique({where: {email: userOne.email}});
 
@@ -127,6 +167,42 @@ describe('Custom RedisApi adapter (client-agnostic end-to-end)', () => {
 
     const cleanup = await prisma.cleanupOrphanedKeys(['User'], {dryRun: true});
     expect(cleanup.deletedCount).toBe(0);
+  });
+
+  test('includedModels whitelists auto-caching end-to-end', async () => {
+    const whitelisted = createFakeRedisApi();
+    const excludedByOmission = createFakeRedisApi();
+
+    const cachingPrisma = new PrismaClient({adapter}).$extends(
+      PrismaExtensionRedis({
+        config: {
+          ttl: 60,
+          stale: 30,
+          auto: {includedModels: ['User']},
+          type: 'JSON',
+          cacheKey: {prefix: 'whitelist_on'},
+        },
+        client: whitelisted,
+      }),
+    );
+    const nonCachingPrisma = new PrismaClient({adapter}).$extends(
+      PrismaExtensionRedis({
+        config: {
+          ttl: 60,
+          stale: 30,
+          auto: {includedModels: ['Post']},
+          type: 'JSON',
+          cacheKey: {prefix: 'whitelist_off'},
+        },
+        client: excludedByOmission,
+      }),
+    );
+
+    await cachingPrisma.user.findUnique({where: {email: userOne.email}});
+    await nonCachingPrisma.user.findUnique({where: {email: userOne.email}});
+
+    expect(whitelisted.store.size).toBeGreaterThan(0);
+    expect(excludedByOmission.store.size).toBe(0);
   });
 
   test('health check works without INFO support', async () => {

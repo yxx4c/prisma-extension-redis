@@ -327,7 +327,7 @@ describe('unlinkPatterns batching', () => {
       maxConcurrentBatches: 1,
     });
 
-    expect(await done).toBe(true);
+    expect(await done).toBe(10);
     expect(fake.store.size).toBe(0);
   });
 });

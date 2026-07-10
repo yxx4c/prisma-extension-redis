@@ -269,6 +269,37 @@ extendedPrisma.user.update({
 - **`uncacheKeys`**: Specifies the keys or patterns to be invalidated.
 - **`hasPattern`**: Indicates if wildcard patterns are used for key matching.
 
+### Direct Cache Invalidation
+
+Cache entries can also be deleted directly with the `uncache` client method, without performing a database operation:
+
+```javascript
+const { deleted } = await extendedPrisma.uncache({
+  uncacheKeys: [
+    extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] }),
+    extendedPrisma.getKeyPattern({ params: [{ prisma: 'Post' }, { glob: '*' }] }),
+  ],
+  hasPattern: true,
+});
+```
+
+Exact keys are removed immediately with `UNLINK`; keys containing glob characters (`*` or `?`) are expanded with `SCAN` when `hasPattern` is true. The same function is available as a standalone import for use outside the extension: `import { uncache } from 'prisma-extension-redis'`.
+
+### Direct Cache Population
+
+Values can be written to the cache directly with the `cache` client method — useful for pre-warming with externally computed data or syncing entries from another source. The entry uses the same envelope cached reads consume, so auto and custom cached queries serve it until it expires after `ttl + stale` seconds:
+
+```javascript
+const { cachedAt, expiresAt, staleUntil } = await extendedPrisma.cache({
+  key: extendedPrisma.getKey({ params: [{ prisma: 'User' }, { id: userId }] }),
+  value: user,
+  ttl: 60,   // optional, defaults to config.ttl
+  stale: 30, // optional, defaults to config.stale
+});
+```
+
+Also available as a standalone import: `import { cache } from 'prisma-extension-redis'`.
+
 ---
 
 ## Key Concepts Explained
@@ -490,9 +521,10 @@ console.log(`Deleted ${result.deletedCount} orphaned keys`);
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `excludedModels` | `string[]` | `[]` | Models to exclude from auto-caching |
+| `includedModels` | `string[]` | - | Only auto-cache these models; mutually exclusive with `excludedModels` |
+| `excludedModels` | `string[]` | `[]` | Models to exclude from auto-caching; mutually exclusive with `includedModels` |
 | `excludedOperations` | `Operation[]` | `[]` | Operations to exclude globally |
-| `models` | `ModelConfig[]` | `[]` | Model-specific configurations |
+| `models` | `ModelConfig[]` | `[]` | Per-model ttl/stale/operation overrides. Customizes models that auto-caching already selected; it does not select them |
 | `ttl` | `number` | Config TTL | Default TTL for auto-cached queries |
 | `stale` | `number` | Config stale | Default extra stale window for auto-cached queries |
 
