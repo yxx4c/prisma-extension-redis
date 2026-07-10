@@ -5,6 +5,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Deliberate holds: TypeScript majors (incl. the TS7 native
+      # compiler) and @types/node majors are migrations to schedule on
+      # our terms, aligned with the Prisma/Bun ecosystem — not weekly
+      # bumps. Minors/patches within the current majors stay enabled.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
