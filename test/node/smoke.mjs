@@ -120,28 +120,34 @@ test('extension constructs with a custom adapter under Node', () => {
 test('live Redis round-trip when REDIS_SERVICE_URI is provided', {
   skip: !process.env.REDIS_SERVICE_URI,
 }, async () => {
-  const {api} = esm.resolveRedisApi(process.env.REDIS_SERVICE_URI);
-  assert.equal(await api.ping(), 'PONG');
+  const {default: Redis} = await import('iovalkey');
+  const client = new Redis(process.env.REDIS_SERVICE_URI);
+  try {
+    const {api} = esm.resolveRedisApi(client);
+    assert.equal(await api.ping(), 'PONG');
 
-  const key = `node-smoke:${Date.now()}`;
-  await esm.cache({
-    redis: api,
-    config: {ttl: 30, stale: 10, type: 'JSON'},
-    key,
-    value: {node: true},
-  });
-  const read = await esm.getCache({
-    ttl: 30,
-    stale: 10,
-    config: {ttl: 30, stale: 10, type: 'JSON'},
-    key,
-    redis: api,
-    args: {},
-    query: async () => {
-      throw new Error('database must not be queried');
-    },
-  });
-  assert.equal(read.meta.source, 'cache');
-  const {deleted} = await esm.uncache({redis: api, uncacheKeys: [key]});
-  assert.equal(deleted, 1);
+    const key = `node-smoke:${Date.now()}`;
+    await esm.cache({
+      redis: api,
+      config: {ttl: 30, stale: 10, type: 'JSON'},
+      key,
+      value: {node: true},
+    });
+    const read = await esm.getCache({
+      ttl: 30,
+      stale: 10,
+      config: {ttl: 30, stale: 10, type: 'JSON'},
+      key,
+      redis: api,
+      args: {},
+      query: async () => {
+        throw new Error('database must not be queried');
+      },
+    });
+    assert.equal(read.meta.source, 'cache');
+    const {deleted} = await esm.uncache({redis: api, uncacheKeys: [key]});
+    assert.equal(deleted, 1);
+  } finally {
+    client.disconnect();
+  }
 });

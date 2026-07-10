@@ -1,5 +1,3 @@
-export type {Redis} from 'iovalkey';
-
 import type {Prisma} from '@prisma/client/extension';
 import type {
   JsArgs,
@@ -540,20 +538,23 @@ export type AutoCacheConfig =
     }
   | boolean;
 
-export interface PrismaExtensionRedisOptions {
+export interface PrismaExtensionRedisOptions<
+  C extends RedisClientInput = RedisClientInput,
+> {
   /**
    * Cache config
    */
   config: CacheConfig;
 
   /**
-   * Redis connection. Accepts iovalkey RedisOptions or a connection
-   * string (a client is constructed for you), an existing
-   * ioredis-compatible instance (iovalkey, ioredis, valkey), an
-   * Upstash-style REST client (@upstash/redis), or any custom RedisApi
-   * implementation.
+   * Your Redis client instance: an ioredis-compatible instance
+   * (iovalkey, ioredis, valkey), an Upstash-style REST client
+   * (@upstash/redis), or any custom RedisApi implementation. The
+   * extension never constructs clients or opens connections itself —
+   * you own the client and its lifecycle, and it is exposed back,
+   * exactly as typed, on the extended client as `prisma.redis`.
    */
-  client: RedisClientInput;
+  client: C;
 }
 
 export type DeletePatterns = {

@@ -1,5 +1,4 @@
 import {Prisma} from '@prisma/client/extension';
-import type Redis from 'iovalkey';
 import {
   getAutoKeyGen,
   getKeyGen,
@@ -33,7 +32,12 @@ import {
   flushModelCache,
   getCacheStats,
 } from './maintenance';
-import {getServerClock, probeJsonSupport, resolveRedisApi} from './redisApi';
+import {
+  getServerClock,
+  probeJsonSupport,
+  type RedisClientInput,
+  resolveRedisApi,
+} from './redisApi';
 import type {
   CacheParams,
   ExtendedModel,
@@ -48,27 +52,31 @@ import {validateConfig} from './validation';
  *
  * @param options - Configuration options for the extension
  * @param options.config - Cache configuration (ttl, stale, auto, type, etc.)
- * @param options.client - Redis connection options (host, port, etc.)
+ * @param options.client - Your Redis client instance (ioredis-family,
+ * Upstash-style, or a custom RedisApi implementation)
  * @returns A Prisma extension with caching methods and automatic query caching
  *
  * @example
  * ```typescript
- * import { PrismaClient } from '@prisma/client';
+ * import { PrismaClient } from './generated/prisma/client';
  * import { PrismaExtensionRedis } from 'prisma-extension-redis';
+ * import { Redis } from 'iovalkey'; // or ioredis, or @upstash/redis
  *
- * const prisma = new PrismaClient().$extends(
+ * const prisma = new PrismaClient({ adapter }).$extends(
  *   PrismaExtensionRedis({
  *     config: { ttl: 60, stale: 30, auto: true, type: 'JSON' },
- *     client: { host: 'localhost', port: 6379 },
+ *     client: new Redis({ host: 'localhost', port: 6379 }),
  *   })
  * );
  * ```
  */
-export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
+export const PrismaExtensionRedis = <C extends RedisClientInput>(
+  options: PrismaExtensionRedisOptions<C>,
+) => {
   const {
     config,
     config: {auto, cacheKey},
-    client: redisOptions,
+    client,
   } = options;
 
   // Validate configuration at initialization
@@ -76,11 +84,10 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
 
   const {delimiter, caseTransformer, prefix} = cacheKey ?? {};
 
-  // Accepts RedisOptions/connection string (an iovalkey client is
-  // constructed), an ioredis-compatible instance, an Upstash-style REST
-  // client, or a custom RedisApi implementation
-  const {api, raw} = resolveRedisApi(redisOptions);
-  const redis = raw as Redis;
+  // Accepts an ioredis-compatible instance, an Upstash-style REST
+  // client, or a custom RedisApi implementation — always caller-owned
+  const {api} = resolveRedisApi(client);
+  const redis = client;
 
   // Keep cache timestamps aligned with the Redis server's clock; sync
   // failures degrade to the local clock and are reported for visibility
@@ -131,8 +138,8 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
     name: 'prisma-extension-redis',
     client: {
       /**
-       * The Redis client you supplied (or the iovalkey instance
-       * constructed from your options) for direct access if needed.
+       * The Redis client you supplied, exactly as typed, for direct
+       * access if needed.
        */
       redis,
 

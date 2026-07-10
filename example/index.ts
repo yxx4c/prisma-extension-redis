@@ -1,4 +1,5 @@
 import {PrismaLibSql} from '@prisma/adapter-libsql';
+import Redis from 'iovalkey';
 import {
   type AutoCacheConfig,
   type CacheConfig,
@@ -9,11 +10,12 @@ import env from './env';
 import {PrismaClient} from './prisma/generated/prisma/client';
 import {getRandomValue} from './utils';
 
-// Create a Redis client
-const client = {
+// Create a Redis client — you construct and own it; the extension never
+// opens connections itself
+const client = new Redis({
   host: env.REDIS_HOST_NAME, // Specify Redis host name
   port: env.REDIS_PORT, // Specify Redis port
-};
+});
 
 const auto: AutoCacheConfig = {
   excludedModels: ['Post'], // Models to exclude from auto-caching default behavior

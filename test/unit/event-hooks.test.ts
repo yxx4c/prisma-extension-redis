@@ -8,12 +8,13 @@ import {
   test,
 } from 'bun:test';
 import {PrismaPg} from '@prisma/adapter-pg';
-import {PrismaExtensionRedis, type RedisOptions} from '../../src';
+import Redis from 'iovalkey';
+import {PrismaExtensionRedis} from '../../src';
 import {users} from '../data';
 import {PrismaClient} from '../prisma/generated/prisma/client';
 
 describe('Event Hooks', () => {
-  const client = process.env.REDIS_SERVICE_URI as RedisOptions;
+  const client = new Redis(process.env.REDIS_SERVICE_URI as string);
   const adapter = new PrismaPg({
     connectionString: process.env.POSTGRES_SERVICE_URI,
   });
@@ -158,7 +159,7 @@ describe('Event Hooks', () => {
 });
 
 describe('Event Hooks - Custom Cache', () => {
-  const client = process.env.REDIS_SERVICE_URI as RedisOptions;
+  const client = new Redis(process.env.REDIS_SERVICE_URI as string);
   const adapter = new PrismaPg({
     connectionString: process.env.POSTGRES_SERVICE_URI,
   });

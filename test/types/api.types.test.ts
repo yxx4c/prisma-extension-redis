@@ -25,11 +25,28 @@ const typeOnly = async () => {
     }),
   );
 
-  // Typed ioredis-family instances are accepted as the client option
+  // Typed ioredis-family instances are accepted as the client option,
+  // and prisma.redis carries the exact client type that was passed
   const {default: Redis} = await import('iovalkey');
+  const ownClient = new Redis({lazyConnect: true});
+  const withIovalkey = new PrismaClient({adapter: {} as never}).$extends(
+    PrismaExtensionRedis({
+      config: {ttl: 60, stale: 30, auto: true, type: 'JSON'},
+      client: ownClient,
+    }),
+  );
+  const exactClient: typeof ownClient = withIovalkey.redis;
+
+  // Connection options and URLs are not accepted — bring a client
   PrismaExtensionRedis({
     config: {ttl: 60, stale: 30, auto: true, type: 'JSON'},
-    client: new Redis({lazyConnect: true}),
+    // @ts-expect-error v5 takes client instances, not connection options
+    client: {host: 'localhost', port: 6379},
+  });
+  PrismaExtensionRedis({
+    config: {ttl: 60, stale: 30, auto: true, type: 'JSON'},
+    // @ts-expect-error v5 takes client instances, not connection URLs
+    client: 'redis://localhost:6379',
   });
 
   // includedModels is typed and mutually understood with models
@@ -105,7 +122,7 @@ const typeOnly = async () => {
     client: api,
   });
 
-  return {cachedAt, email, keyParams, uncacheParams, cacheParams};
+  return {cachedAt, email, exactClient, keyParams, uncacheParams, cacheParams};
 };
 
 test('public API type surface compiles', () => {

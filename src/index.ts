@@ -1,5 +1,4 @@
-export type {Redis, RedisOptions} from 'iovalkey';
-export {getKeyGen, getKeyPatternGen} from './cacheKey';
+export {getKeyGen, getKeyPatternGen, snakeCase} from './cacheKey';
 export {
   cache,
   filterOperations,

@@ -5,10 +5,11 @@ This document provides detailed information about all configuration options for 
 ## Quick Start Configuration
 
 ```typescript
-import { PrismaClient } from '@prisma/client';
+import Redis from 'iovalkey'; // or ioredis, or @upstash/redis
 import { PrismaExtensionRedis } from 'prisma-extension-redis';
+import { PrismaClient } from './generated/prisma/client';
 
-const prisma = new PrismaClient().$extends(
+const prisma = new PrismaClient({ adapter }).$extends(
   PrismaExtensionRedis({
     config: {
       ttl: 60,
@@ -16,10 +17,10 @@ const prisma = new PrismaClient().$extends(
       type: 'JSON',
       auto: true,
     },
-    client: {
+    client: new Redis({
       host: 'localhost',
       port: 6379,
-    },
+    }),
   })
 );
 ```
@@ -43,22 +44,23 @@ const prisma = new PrismaClient().$extends(
 | `chunkSize` | `number` | No | `1000` | Batch size for pattern deletion |
 | `maxConcurrentBatches` | `number` | No | `5` | Concurrent deletion batches |
 
-### `client` Object
+### `client` Option
 
-The client configuration accepts either a connection string or Redis options:
+The client is a Redis client instance you construct and own — an ioredis-compatible instance, an `@upstash/redis` client, or any custom `RedisApi` implementation (see the [adapters guide](ADAPTERS.md)):
 
 ```typescript
-// Connection string
-client: 'redis://localhost:6379'
+import Redis from 'iovalkey'; // or ioredis
 
-// Or Redis options object
-client: {
+client: new Redis({
   host: 'localhost',
   port: 6379,
   password: 'secret',
   db: 0,
   tls: {},
-}
+})
+
+// or a connection URL, handled by your client
+client: new Redis('redis://localhost:6379')
 ```
 
 ## TTL and Stale Configuration
@@ -372,11 +374,11 @@ const prisma = new PrismaClient().$extends(
       chunkSize: 1000,
       maxConcurrentBatches: 5,
     },
-    client: {
+    client: new Redis({
       host: process.env.REDIS_HOST,
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
-    },
+    }),
   })
 );
 ```

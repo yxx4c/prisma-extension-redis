@@ -11,6 +11,8 @@
  *    (cache errors reported via onError, never thrown to callers)
  * 3. Redis restarted - caching resumes, health returns to healthy
  */
+
+import Redis from 'iovalkey';
 import {checkHealth, getCache} from '../../src';
 import {resolveRedisApi} from '../../src/redisApi';
 
@@ -21,7 +23,7 @@ if (!uri || !container) {
   process.exit(1);
 }
 
-const {api} = resolveRedisApi(uri);
+const {api} = resolveRedisApi(new Redis(uri));
 const prefix = `chaos:${Date.now()}`;
 let cacheErrors = 0;
 const config = {

@@ -288,21 +288,6 @@ describe('Upstash-style client support', () => {
   });
 });
 
-describe('resolveRedisApi options-object input', () => {
-  test('plain options objects construct an iovalkey client', async () => {
-    const uri = new URL(
-      process.env.REDIS_SERVICE_URI ?? 'redis://localhost:6379',
-    );
-    const {api, raw} = resolveRedisApi({
-      host: uri.hostname,
-      port: Number(uri.port || 6379),
-    });
-
-    expect(await api.ping()).toBe('PONG');
-    await (raw as {quit(): Promise<unknown>}).quit();
-  });
-});
-
 describe('resolveRedisApi rejection', () => {
   test('throws a TypeError for objects exposing client verbs with the wrong shape', () => {
     const misShaped = {
@@ -316,17 +301,23 @@ describe('resolveRedisApi rejection', () => {
     );
   });
 
-  test('connection options with function fields construct a client', () => {
-    const {raw} = resolveRedisApi({
+  test('connection options and URLs are rejected with the BYO remedy', () => {
+    const optionsObject = {
       host: '127.0.0.1',
       port: 6399,
-      lazyConnect: true,
       retryStrategy: () => null,
-    } as never);
+    };
 
-    const instance = raw as {disconnect: () => void};
-    expect(typeof instance.disconnect).toBe('function');
-    instance.disconnect();
+    expect(() => resolveRedisApi(optionsObject as never)).toThrow(TypeError);
+    expect(() => resolveRedisApi(optionsObject as never)).toThrow(
+      /bring your own client/,
+    );
+    expect(() => resolveRedisApi('redis://localhost:6379' as never)).toThrow(
+      /bring your own client/,
+    );
+    expect(() => resolveRedisApi(undefined as never)).toThrow(
+      /bring your own client/,
+    );
   });
 });
 

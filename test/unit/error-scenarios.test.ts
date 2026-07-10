@@ -9,7 +9,6 @@ import {
   flushModelCache,
   getCache,
   PrismaExtensionRedis,
-  type RedisOptions,
   unlinkPatterns,
 } from '../../src';
 import {createServerClock} from '../../src/redisApi';
@@ -18,8 +17,8 @@ import {createFakeRedisApi} from '../fakeRedisApi';
 import {PrismaClient} from '../prisma/generated/prisma/client';
 
 describe('Error Scenarios', () => {
-  const client = process.env.REDIS_SERVICE_URI as RedisOptions;
-  const redis = new Redis(client);
+  const redis = new Redis(process.env.REDIS_SERVICE_URI as string);
+  const client = redis;
   const adapter = new PrismaPg({
     connectionString: process.env.POSTGRES_SERVICE_URI,
   });
@@ -382,8 +381,7 @@ describe('Health Check Error Scenarios', () => {
 });
 
 describe('Maintenance Batch Operations', () => {
-  const client = process.env.REDIS_SERVICE_URI as RedisOptions;
-  const redis = new Redis(client);
+  const redis = new Redis(process.env.REDIS_SERVICE_URI as string);
 
   afterAll(async () => {
     await redis.flushdb();
@@ -555,8 +553,7 @@ describe('Expired Beyond Stale Window', () => {
 });
 
 describe('Cache Read Error Scenarios', () => {
-  const client = process.env.REDIS_SERVICE_URI as RedisOptions;
-  const redis = new Redis(client);
+  const redis = new Redis(process.env.REDIS_SERVICE_URI as string);
 
   afterAll(async () => {
     await redis.quit();

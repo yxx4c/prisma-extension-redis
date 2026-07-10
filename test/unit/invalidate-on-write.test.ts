@@ -1,9 +1,9 @@
 import {beforeEach, describe, expect, test} from 'bun:test';
-import {PrismaExtensionRedis, type RedisOptions} from '../../src';
+import {PrismaExtensionRedis} from '../../src';
 import {isAutoInvalidateEnabled} from '../../src/cacheUncache';
-import {prisma} from '../client';
+import {prisma, redisClient} from '../client';
 
-const client = process.env.REDIS_SERVICE_URI as RedisOptions;
+const client = redisClient;
 
 const base = {ttl: 60, stale: 30, type: 'JSON'} as const;
 

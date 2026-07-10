@@ -14,21 +14,21 @@
 
 ---
 
-## What's New in v4
+## What's New in v5
 
-- **Prisma 7** with driver adapters; `@prisma/client` is a peer dependency (fixes nested-client type errors)
-- **Bring your own Redis client**: ioredis-family instances, `@upstash/redis`, or any custom `RedisApi`
-- **Direct cache control**: `prisma.cache(...)` and `prisma.uncache(...)` without a database operation
-- **`includedModels`** whitelist mode for auto-caching
-- Plain results by default with opt-in `meta: true`, server-synced timestamps, single runtime dependency
+- **Zero runtime dependencies — bring your own Redis client**: pass an ioredis-family instance, an `@upstash/redis` client, or any custom `RedisApi`; the extension never opens connections on your behalf, and `prisma.redis` is typed as exactly the client you passed
+- **Write invalidation**: `auto.invalidateOnWrite` purges a model's auto-cache after successful writes
+- **Edge-ready**: the published build imports nothing but the Prisma peer — pair it with `@upstash/redis` in Cloudflare Workers or Vercel Edge
+- **Fail-fast diagnostics**: a JSON-configured extension probes RedisJSON support at startup and says exactly how to fix a mismatch; `healthCheck()` reports `jsonSupport`
+- Everything from the v4 line: Prisma 7 driver adapters with `@prisma/client` as a peer dependency, direct `prisma.cache(...)`/`prisma.uncache(...)`, `includedModels`, plain results with opt-in `meta: true`, server-synced timestamps
 
-Upgrading from v2/v3? See the [migration guide](docs/MIGRATION.md).
+Upgrading from v2, v3, or v4? See the [migration guide](docs/MIGRATION.md).
 
 ---
 
 ## Documentation
 
-- [Migration to v4](docs/MIGRATION.md)
+- [Migration guide](docs/MIGRATION.md)
 - [Configuration reference](docs/CONFIGURATION.md)
 - [Bring-your-own-client adapters](docs/ADAPTERS.md)
 - [Meta information](docs/META_FEATURE.md)
@@ -66,6 +66,12 @@ pnpm add prisma-extension-redis
 bun add prisma-extension-redis
 ```
 
+The extension has **zero runtime dependencies** and never opens connections itself — you bring the Redis client, exactly like Prisma 7's driver adapters bring the database driver. Install the client of your choice alongside it, e.g.:
+
+```bash
+npm install prisma-extension-redis iovalkey   # or ioredis, or @upstash/redis
+```
+
 **Note**: `@prisma/client` (v7.2 or higher) is a peer dependency — your project provides its own Prisma client, which this extension attaches to.
 
 ---
@@ -74,10 +80,11 @@ bun add prisma-extension-redis
 
 ### Step 1: Initialize Required Clients
 
-Before setting up caching, initialize your Prisma client and Redis client config:
+Before setting up caching, initialize your Prisma client and your Redis client:
 
 ```javascript
 import { PrismaPg } from '@prisma/adapter-pg'; // Driver adapter for your database
+import Redis from 'iovalkey'; // or 'ioredis' — any ioredis-compatible client
 import {
   PrismaExtensionRedis,
   type AutoCacheConfig,
@@ -89,11 +96,11 @@ import { PrismaClient } from './generated/prisma/client'; // Prisma 7 generated 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-// Redis client config
-const client = {
+// Your Redis client — you own it (reuse it anywhere else in your app)
+const client = new Redis({
   host: process.env.REDIS_HOST_NAME,    // Redis host
   port: Number(process.env.REDIS_PORT), // Redis port
-};
+});
 ```
 
 ### Step 2: Configure Auto-Cache Settings
@@ -165,25 +172,18 @@ const extendedPrisma = prisma.$extends(
 
 ## Bring Your Own Redis Client
 
-The `client` option is Redis-package agnostic. It accepts any of the following:
+The `client` option is Redis-package agnostic: you construct the client, the extension detects and wraps it. Your instance is exposed back — typed exactly as you passed it — as `extendedPrisma.redis`. Pick your flavor:
 
-**1. Connection options or a URI string** — an [iovalkey](https://github.com/valkey-io/iovalkey) client is constructed for you (the classic behavior):
-
-```typescript
-PrismaExtensionRedis({ config, client: { host: 'localhost', port: 6379 } });
-PrismaExtensionRedis({ config, client: 'redis://localhost:6379' });
-```
-
-**2. An existing ioredis-compatible instance** (`iovalkey`, `ioredis`, valkey clients) — you own the connection lifecycle:
+**1. An ioredis-compatible instance** (`iovalkey`, `ioredis`, valkey clients) — you own the connection lifecycle:
 
 ```typescript
-import { Redis } from 'ioredis';
+import Redis from 'iovalkey'; // or: import { Redis } from 'ioredis';
 
 const redis = new Redis(process.env.REDIS_URL);
 PrismaExtensionRedis({ config, client: redis });
 ```
 
-**3. An Upstash-style REST client** (`@upstash/redis`) — detected and wrapped automatically; works with `automaticDeserialization` on or off:
+**2. An Upstash-style REST client** (`@upstash/redis`) — detected and wrapped automatically; works with `automaticDeserialization` on or off, and because it is fetch-based it also runs in edge runtimes (Cloudflare Workers, Vercel Edge):
 
 ```typescript
 import { Redis } from '@upstash/redis';
@@ -195,7 +195,7 @@ const redis = new Redis({
 PrismaExtensionRedis({ config, client: redis });
 ```
 
-**4. Any custom `RedisApi` implementation** — implement one small interface and any store works (see [docs/ADAPTERS.md](docs/ADAPTERS.md) for the full contract):
+**3. Any custom `RedisApi` implementation** — implement one small interface and any store works (see [docs/ADAPTERS.md](docs/ADAPTERS.md) for the full contract):
 
 ```typescript
 import { PrismaExtensionRedis, type RedisApi } from 'prisma-extension-redis';
@@ -573,12 +573,12 @@ console.log(`Deleted ${result.deletedCount} orphaned keys`);
 ## Prerequisites
 
 - **Prisma 7 or higher** is required. This package uses the Prisma 7 driver adapter pattern.
-- Ensure you have a running Redis or Dragonfly instance. If using Redis, `Redis.JSON` must be enabled to use JSON type cache (by default, it is enabled in Dragonfly).
+- **A Redis client of your choice** (`iovalkey`, `ioredis`, `@upstash/redis`, or a custom `RedisApi`) — the extension never constructs connections itself.
+- Ensure you have a running Redis or Dragonfly instance. If using Redis, `Redis.JSON` must be enabled to use JSON type cache (by default, it is enabled in Dragonfly) — with `type: 'JSON'` the extension probes for it at startup and tells you exactly what to change if it's missing.
 
 ## Dependencies
 
-- `iovalkey` is the only runtime dependency, used to construct a client when you pass connection options. Bring your own client (ioredis, @upstash/redis, or a custom `RedisApi`) and it is the only connection layer used.
-- Auto-cache key hashing and concurrent-read coalescing are implemented inline (no external hashing or coalescing libraries).
+- **None.** The package has zero runtime dependencies: the Redis client is yours, `@prisma/client` is a peer, and auto-cache key hashing and concurrent-read coalescing are implemented inline (no external hashing or coalescing libraries).
 
 ---
 

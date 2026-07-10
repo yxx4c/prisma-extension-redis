@@ -9,7 +9,9 @@
  * - stability: heap growth stays bounded across bursts
  * - correctness: every request resolves with the expected value
  */
-import {getCache, promiseCoalesceGetCache, uncache} from '../../src';
+
+import Redis from 'iovalkey';
+import {promiseCoalesceGetCache, uncache} from '../../src';
 import {resolveRedisApi} from '../../src/redisApi';
 
 const uri = process.env.REDIS_SERVICE_URI;
@@ -22,7 +24,7 @@ const bursts = Number(process.argv[2] ?? 20);
 const concurrency = Number(process.argv[3] ?? 2000);
 const keyCount = Number(process.argv[4] ?? 100);
 
-const {api} = resolveRedisApi(uri);
+const {api} = resolveRedisApi(new Redis(uri));
 const config = {ttl: 2, stale: 1, type: 'JSON'} as const;
 const prefix = `stress:${Date.now()}`;
 

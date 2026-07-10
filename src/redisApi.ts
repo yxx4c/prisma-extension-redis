@@ -1,5 +1,3 @@
-import Redis, {type RedisOptions} from 'iovalkey';
-
 /**
  * The minimal, client-agnostic Redis surface this extension needs.
  *
@@ -101,10 +99,12 @@ export type IoValkeyCompatible = {
   scan(...args: never[]): unknown;
 };
 
-/** Everything accepted as the extension's `client` option. */
+/**
+ * Everything accepted as the extension's `client` option: a client
+ * instance you construct and own. Connection options and URLs are not
+ * accepted — the extension never opens connections on your behalf.
+ */
 export type RedisClientInput =
-  | RedisOptions
-  | string
   | IoValkeyLike
   | IoValkeyCompatible
   | UpstashLike
@@ -286,11 +286,11 @@ const apiCache = new WeakMap<object, RedisApi>();
  * Resolves anything accepted as the `client` option to a RedisApi:
  * - a RedisApi implementation is used as-is
  * - ioredis-compatible instances and Upstash-style clients are wrapped
- * - a connection string or RedisOptions object constructs an iovalkey
- *   client (the historical behavior)
  *
  * Wrappers are memoized per client instance, so utilities can resolve on
- * every call without allocating.
+ * every call without allocating. Connection options and URLs are
+ * rejected with the remedy — the extension has no Redis dependency of
+ * its own and never opens connections on the caller's behalf.
  */
 export const resolveRedisApi = (
   client: RedisClientInput,
@@ -315,8 +315,8 @@ export const resolveRedisApi = (
     }
 
     // An object exposing client verbs is a (mis-shaped) client, not
-    // connection options - fail loudly instead of trying to connect.
-    // Plain options legitimately carry function fields (retryStrategy,
+    // connection options - fail loudly with the client remedy. Plain
+    // options legitimately carry function fields (retryStrategy,
     // reconnectOnError), so only Redis-verb functions count
     const verbs = [
       'get',
@@ -333,16 +333,15 @@ export const resolveRedisApi = (
     const record = client as Record<string, unknown>;
     if (verbs.some(verb => isFunction(record[verb]))) {
       throw new TypeError(
-        'Unrecognized Redis client: implement the RedisApi interface, or pass an ioredis-compatible instance, an Upstash-style client, or iovalkey connection options.',
+        'Unrecognized Redis client: implement the RedisApi interface, or pass an ioredis-compatible instance or an Upstash-style client (see docs/ADAPTERS.md).',
       );
     }
   }
 
-  // Connection string or RedisOptions: construct an iovalkey client
-  const instance = new Redis(client as RedisOptions);
-  const api = fromIoValkeyLike(instance as unknown as IoValkeyLike);
-  apiCache.set(instance, api);
-  return {api, raw: instance};
+  throw new TypeError(
+    'prisma-extension-redis does not construct Redis clients from connection options or URLs — bring your own client instance. ' +
+      'For example: `npm i iovalkey` (or ioredis) and pass `client: new Redis(...)`; or pass an `@upstash/redis` client; or any implementation of the RedisApi interface. See docs/ADAPTERS.md.',
+  );
 };
 
 /**
