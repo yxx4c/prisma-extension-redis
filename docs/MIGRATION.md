@@ -1,5 +1,7 @@
 # Migrating to v4
 
+> **Which version are you coming from?** v3 was only ever published to the npm `next` tag — `latest` stayed on v2.1.1 until v4. If you installed normally (`npm install prisma-extension-redis`), you're migrating from **v2**; notes that only apply to `next`-tag users are marked below.
+
 ## Requirements
 
 - **Prisma 7 or newer**, using the driver-adapter pattern and the `prisma-client` generator.
@@ -8,7 +10,7 @@
 
 ## Setup changes
 
-Before (v3, Prisma 6):
+Before (v2/v3, Prisma 5/6):
 
 ```typescript
 import { PrismaClient } from '@prisma/client';
@@ -34,8 +36,8 @@ const prisma = new PrismaClient({ adapter }).$extends(
 
 ## Behavior changes
 
-- **Query results are plain by default.** The v3.0 behavior of wrapping every result in `{ result, isCached }` is gone; you get the model type directly. Opt in per query with `meta: true` to receive `{ result, meta }` with cache source, timestamps, and `recache`/`uncache` actions ([docs](META_FEATURE.md)).
-- **Auto-cache keys changed format** (a faster structural hash replaces `object-code`). Entries cached by v3 are not re-used after upgrading; they expire via their TTLs on their own. Custom keys are unaffected.
+- **Query results are plain by default.** v3's wrapping of every result in `{ result, isCached }` is gone; you get the model type directly. (That wrapper only ever shipped on the `next` tag — coming from v2, results were already plain and nothing changes here.) Opt in per query with `meta: true` to receive `{ result, meta }` with cache source, timestamps, and `recache`/`uncache` actions ([docs](META_FEATURE.md)).
+- **Auto-cache keys changed format** (a faster structural hash replaces `object-code`). Entries cached by v2/v3 are not re-used after upgrading; they expire via their TTLs on their own. Custom keys are unaffected.
 - **`ttl: 0` with `stale: 0` is rejected at initialization** (`ValidationError`) — that combination produced entries that could never be served. `ttl: 0` with a positive `stale` remains valid (permanent stale-while-revalidate).
 - **`unlinkPatterns` resolves with deletion counts** per pattern instead of booleans, matching the maintenance utilities.
 - Dependency slim-down: `lodash`/`object-code`/`promise-coalesce` are gone; `iovalkey` is the only runtime dependency.
