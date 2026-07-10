@@ -29,11 +29,24 @@ bun audit
 ## Stress harnesses (on demand)
 
 ```bash
-# Load/soak: coalescing efficacy, bounded heap, zero failures under concurrency
+# Load: coalescing efficacy, throughput, p50/p95/p99 latency, bounded heap
 REDIS_SERVICE_URI=redis://localhost:6379 bun test/stress/load.ts [bursts] [concurrency] [keys]
+
+# Soak: long-window mixed traffic (readers + writers + pattern storms), heap sampled per minute
+REDIS_SERVICE_URI=redis://localhost:6379 bun test/stress/soak.ts [minutes] [readers] [keys]
 
 # Chaos: graceful degradation while Redis is down, recovery after restart
 REDIS_SERVICE_URI=redis://localhost:6379 CHAOS_CONTAINER=pxr-redis bun test/stress/chaos.ts
+
+# Eviction pressure: correctness while the server LRU-evicts entries underneath
+# (server needs e.g. --maxmemory 64mb --maxmemory-policy allkeys-lru)
+REDIS_SERVICE_URI=redis://localhost:6379 bun test/stress/eviction.ts
+
+# JSON-less server contract (run against redis:7-alpine)
+REDIS_SERVICE_URI=redis://localhost:6379 bun test/stress/plain-redis.ts
+
+# Adversarial edges: 1MB payloads, 10k-key invalidation storm, clock skew, mixed concurrency
+REDIS_SERVICE_URI=redis://localhost:6379 bun test/stress/adversarial.ts
 ```
 
-The load harness also runs weekly in CI (`stress.yml`).
+The load harness also runs weekly in CI (`stress.yml`). Results from the full campaign are recorded in [ASSURANCE.md](ASSURANCE.md).

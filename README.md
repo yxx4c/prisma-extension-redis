@@ -26,6 +26,20 @@ Upgrading from v2, v3, or v4? See the [migration guide](docs/MIGRATION.md).
 
 ---
 
+## Battle-Tested
+
+The v5 release was validated end to end — full numbers and methodology in the [assurance report](docs/ASSURANCE.md):
+
+- **303 tests, 100% line coverage**, run against real servers: Dragonfly, Redis Stack 7.4, and Redis 8 (native JSON) — plus the Prisma peer floor in CI
+- **250k concurrent requests**: 100:1 request coalescing (2,500 DB calls), ~31k req/s, p50 2.8ms / p95 6.7ms, zero failures
+- **1-hour soak** under mixed read/write/invalidation traffic: tens of millions of requests, heap bounded, zero failures
+- **Chaos**: Redis killed mid-traffic — 100% of requests still served (from the database), automatic recovery on restart
+- **Eviction pressure**: 1,600+ entries LRU-evicted underneath the extension — every read still correct
+- **Live client matrix**: iovalkey, ioredis, and @upstash/redis (real REST endpoint) pass the same conformance suite
+- **The published artifact itself** is verified: installed from npm into a fresh consumer, zero dependencies on the wire, ESM + CJS, provenance-attested
+
+---
+
 ## Documentation
 
 - [Migration guide](docs/MIGRATION.md)
@@ -35,6 +49,7 @@ Upgrading from v2, v3, or v4? See the [migration guide](docs/MIGRATION.md).
 - [Monitoring and observability](docs/MONITORING.md)
 - [Cache maintenance](docs/MAINTENANCE.md)
 - [Testing and stress harnesses](docs/TESTING.md)
+- [Assurance report — how this is verified, with numbers](docs/ASSURANCE.md)
 
 ---
 

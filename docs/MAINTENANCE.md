@@ -7,7 +7,7 @@ Beyond the utilities below, entries can be written and deleted directly, without
 - `prisma.cache({key, value, ttl?, stale?})` — plant a value in the exact envelope cached reads consume; returns the `{cachedAt, expiresAt, staleUntil}` window.
 - `prisma.uncache({uncacheKeys, hasPattern?, chunkSize?, maxConcurrentBatches?})` — delete keys and/or glob patterns; exact keys skip SCAN entirely; returns `{deleted}`.
 
-Both are also available as standalone imports (`import { cache, uncache } from 'prisma-extension-redis'`). See the [README](../README.md#direct-cache-invalidation) for examples.
+Both are also available as standalone imports (`import { cache, uncache } from 'prisma-extension-redis'`). See the [README](https://github.com/yxx4c/prisma-extension-redis#direct-cache-invalidation) for examples.
 
 This document covers cache maintenance operations including statistics, model flushing, and orphaned key cleanup.
 
