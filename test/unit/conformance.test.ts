@@ -15,4 +15,12 @@ if (process.env.REDIS_SERVICE_URI) {
     );
     return {api, prefix: `conf-live-${Math.trunc(performance.now())}`};
   });
+
+  runRedisApiConformance('ioredis (live)', async () => {
+    const {default: IORedis} = await import('ioredis');
+    const {api} = resolveRedisApi(
+      new IORedis(process.env.REDIS_SERVICE_URI as string),
+    );
+    return {api, prefix: `conf-ioredis-${Math.trunc(performance.now())}`};
+  });
 }

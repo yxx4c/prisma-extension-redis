@@ -37,16 +37,24 @@ const query = async () => {
 
 const heapMb = () => Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
 
+const latencies = new Float64Array(bursts * concurrency);
+let latencyCount = 0;
+
+const percentile = (sorted: Float64Array, p: number) =>
+  sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))];
+
 const run = async () => {
   console.log(
     `load: ${bursts} bursts x ${concurrency} requests over ${keyCount} keys`,
   );
   const heapStart = heapMb();
+  const wallStart = performance.now();
   let failures = 0;
 
   for (let burst = 0; burst < bursts; burst++) {
-    const requests = Array.from({length: concurrency}, (_, i) =>
-      promiseCoalesceGetCache({
+    const requests = Array.from({length: concurrency}, (_, i) => {
+      const started = performance.now();
+      return promiseCoalesceGetCache({
         ttl: config.ttl,
         stale: config.stale,
         config,
@@ -56,14 +64,16 @@ const run = async () => {
         query,
       }).then(
         r => {
+          latencies[latencyCount++] = performance.now() - started;
           if ((r.result as {payload: string}).payload.length !== 256)
             failures++;
         },
         () => {
+          latencies[latencyCount++] = performance.now() - started;
           failures++;
         },
-      ),
-    );
+      );
+    });
     await Promise.all(requests);
 
     if (burst % 5 === 4) {
@@ -76,14 +86,21 @@ const run = async () => {
     await new Promise(resolve => setTimeout(resolve, 150));
   }
 
+  const wallSeconds = (performance.now() - wallStart) / 1000;
   Bun.gc(true);
   const heapEnd = heapMb();
   const totalRequests = bursts * concurrency;
   // Worst case one refresh per key per burst plus initial fills
   const dbCallCeiling = keyCount * (bursts + 1);
 
+  const sorted = latencies.slice(0, latencyCount).sort();
   console.log(
     `done: requests=${totalRequests} dbCalls=${dbCalls} (ceiling ${dbCallCeiling}) heap ${heapStart}->${heapEnd}MB failures=${failures}`,
+  );
+  console.log(
+    `throughput=${Math.round(totalRequests / wallSeconds)} req/s over ${wallSeconds.toFixed(1)}s ` +
+      `latency ms: p50=${percentile(sorted, 50).toFixed(2)} p95=${percentile(sorted, 95).toFixed(2)} ` +
+      `p99=${percentile(sorted, 99).toFixed(2)} max=${sorted[sorted.length - 1].toFixed(1)}`,
   );
 
   await uncache({redis: api, uncacheKeys: [`${prefix}:*`], hasPattern: true});
