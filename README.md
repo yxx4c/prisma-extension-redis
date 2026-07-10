@@ -14,6 +14,30 @@
 
 ---
 
+## What's New in v4
+
+- **Prisma 7** with driver adapters; `@prisma/client` is a peer dependency (fixes nested-client type errors)
+- **Bring your own Redis client**: ioredis-family instances, `@upstash/redis`, or any custom `RedisApi`
+- **Direct cache control**: `prisma.cache(...)` and `prisma.uncache(...)` without a database operation
+- **`includedModels`** whitelist mode for auto-caching
+- Plain results by default with opt-in `meta: true`, server-synced timestamps, single runtime dependency
+
+Upgrading from v2/v3? See the [migration guide](docs/MIGRATION.md).
+
+---
+
+## Documentation
+
+- [Migration to v4](docs/MIGRATION.md)
+- [Configuration reference](docs/CONFIGURATION.md)
+- [Bring-your-own-client adapters](docs/ADAPTERS.md)
+- [Meta information](docs/META_FEATURE.md)
+- [Monitoring and observability](docs/MONITORING.md)
+- [Cache maintenance](docs/MAINTENANCE.md)
+- [Testing and stress harnesses](docs/TESTING.md)
+
+---
+
 ## Installation
 
 You can install `prisma-extension-redis` using your preferred package manager:
