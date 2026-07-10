@@ -113,6 +113,31 @@ export type RedisClientInput =
 const isFunction = (value: unknown): value is (...a: never[]) => unknown =>
   typeof value === 'function';
 
+/**
+ * Verifies the server accepts RedisJSON commands by writing and removing
+ * a short-lived probe key through the same jsonSet path cached queries
+ * use. The probe key expires on its own if the unlink is not reached.
+ */
+export const probeJsonSupport = async (
+  api: RedisApi,
+): Promise<{supported: boolean; error?: Error}> => {
+  const probeKey = '__prisma_extension_redis__:json_probe';
+  try {
+    await api.jsonSet(probeKey, '{"probe":1}', 60);
+    try {
+      await api.unlink([probeKey]);
+    } catch {
+      // The probe key expires via its TTL
+    }
+    return {supported: true};
+  } catch (error) {
+    return {
+      supported: false,
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+};
+
 const hasTtl = (ttl?: number): ttl is number =>
   ttl !== undefined && ttl !== Number.POSITIVE_INFINITY && ttl > 0;
 

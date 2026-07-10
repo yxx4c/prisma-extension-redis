@@ -2,7 +2,11 @@ import {
   DEGRADED_LATENCY_THRESHOLD_MS,
   HEALTH_CHECK_TIMEOUT_MS,
 } from './constants';
-import {type RedisClientInput, resolveRedisApi} from './redisApi';
+import {
+  probeJsonSupport,
+  type RedisClientInput,
+  resolveRedisApi,
+} from './redisApi';
 
 /**
  * Health check status
@@ -28,6 +32,8 @@ export interface HealthResult {
     version?: string;
     mode?: string;
   };
+  /** Whether the server accepts RedisJSON commands (probed on request) */
+  jsonSupport?: boolean;
 }
 
 /**
@@ -49,6 +55,10 @@ export interface HealthResult {
  */
 export const checkHealth = async (
   redis: RedisClientInput,
+  opts?: {
+    /** Also probe RedisJSON support (relevant when caching with type JSON) */
+    checkJson?: boolean;
+  },
 ): Promise<HealthResult> => {
   const {api} = resolveRedisApi(redis);
   const timestamp = new Date();
@@ -86,6 +96,11 @@ export const checkHealth = async (
       }
     }
 
+    let jsonSupport: boolean | undefined;
+    if (opts?.checkJson) {
+      jsonSupport = (await probeJsonSupport(api)).supported;
+    }
+
     return {
       status:
         latencyMs > DEGRADED_LATENCY_THRESHOLD_MS ? 'degraded' : 'healthy',
@@ -93,6 +108,7 @@ export const checkHealth = async (
       connected,
       timestamp,
       serverInfo,
+      jsonSupport,
     };
   } catch (error) {
     return {

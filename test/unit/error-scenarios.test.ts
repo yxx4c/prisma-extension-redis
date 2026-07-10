@@ -446,20 +446,20 @@ describe('Maintenance Batch Operations', () => {
     test('should batch delete when many keys exist', async () => {
       await redis.flushdb();
 
-      // Create many keys for a model (more than batchSize)
-      // Note: flushModelCache uses lowercase model name in pattern
+      // Create many keys for a model (more than batchSize), stored the
+      // way the key generator writes them (snake_cased model segment)
       const keysToCreate = 20;
       for (let i = 0; i < keysToCreate; i++) {
-        await redis.set(`prisma:testmodel:operation:${i}`, 'value');
+        await redis.set(`prisma:test_model:operation:${i}`, 'value');
       }
 
       // Verify keys were created
-      const createdKeys = await redis.keys('prisma:testmodel:*');
+      const createdKeys = await redis.keys('prisma:test_model:*');
       expect(createdKeys.length).toBe(keysToCreate);
 
       const result = await flushModelCache({
         redis,
-        model: 'TestModel', // Will be lowercased to 'testmodel'
+        model: 'TestModel',
         prefix: 'prisma',
         delimiter: ':',
         batchSize: 5, // Small batch to trigger batching
@@ -468,26 +468,26 @@ describe('Maintenance Batch Operations', () => {
       expect(result.deletedCount).toBe(keysToCreate);
 
       // Verify all keys are deleted
-      const remainingKeys = await redis.keys('prisma:testmodel:*');
+      const remainingKeys = await redis.keys('prisma:test_model:*');
       expect(remainingKeys.length).toBe(0);
     });
 
     test('should handle partial batch at end', async () => {
       await redis.flushdb();
 
-      // Create 7 keys with proper model pattern (will be 1 full batch of 5 + partial batch of 2)
-      // Note: flushModelCache uses lowercase model name in pattern
+      // Create 7 keys with the generator's model segment casing (1 full
+      // batch of 5 + partial batch of 2)
       for (let i = 0; i < 7; i++) {
-        await redis.set(`prisma:partialmodel:findUnique:${i}`, 'value');
+        await redis.set(`prisma:partial_model:findUnique:${i}`, 'value');
       }
 
       // Verify keys were created
-      const createdKeys = await redis.keys('prisma:partialmodel:*');
+      const createdKeys = await redis.keys('prisma:partial_model:*');
       expect(createdKeys.length).toBe(7);
 
       const result = await flushModelCache({
         redis,
-        model: 'PartialModel', // Will be lowercased to 'partialmodel'
+        model: 'PartialModel',
         prefix: 'prisma',
         delimiter: ':',
         batchSize: 5,

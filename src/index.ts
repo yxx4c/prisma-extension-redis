@@ -61,6 +61,7 @@ export {
   createServerClock,
   fromIoValkeyLike,
   fromUpstashLike,
+  probeJsonSupport,
   resolveRedisApi,
 } from './redisApi';
 export type {

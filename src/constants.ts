@@ -88,3 +88,15 @@ export type DebugLevelType = (typeof DEBUG_LEVELS)[keyof typeof DEBUG_LEVELS];
 
 /** Default concurrency for cache warming operations */
 export const DEFAULT_WARM_CONCURRENCY = 5;
+
+// ============================================
+// CAPABILITY DETECTION
+// ============================================
+
+/**
+ * Remedy attached when the configured type is JSON but the server
+ * rejects RedisJSON commands; without it the extension degrades to
+ * serving every query from the database with only debug-level traces
+ */
+export const JSON_UNSUPPORTED_HINT =
+  "the Redis server rejects RedisJSON commands required by type: 'JSON', so nothing is cached and every query hits the database; set config.type to 'STRING' or use a JSON-capable server (Redis Stack, Dragonfly, Upstash)";

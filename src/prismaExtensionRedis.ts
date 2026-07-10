@@ -13,7 +13,11 @@ import {
 } from './cacheUncache';
 import type {WarmOptions, WarmQuery} from './cacheWarmer';
 import {createCacheWarmer} from './cacheWarmer';
-import {DEFAULT_DELIMITER, DEFAULT_PREFIX} from './constants';
+import {
+  DEFAULT_DELIMITER,
+  DEFAULT_PREFIX,
+  JSON_UNSUPPORTED_HINT,
+} from './constants';
 import {createDebugLogger, noopLogger} from './debug';
 import {checkHealth} from './healthCheck';
 import type {CleanupOptions, FlushModelOptions} from './maintenance';
@@ -22,7 +26,7 @@ import {
   flushModelCache,
   getCacheStats,
 } from './maintenance';
-import {getServerClock, resolveRedisApi} from './redisApi';
+import {getServerClock, probeJsonSupport, resolveRedisApi} from './redisApi';
 import type {
   CacheParams,
   ExtendedModel,
@@ -81,6 +85,23 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
     if (config.onError) config.onError(error);
   });
   void clock.prime();
+
+  // A JSON config against a server without RedisJSON does not crash — it
+  // silently serves every query from the database, so the misconfiguration
+  // is announced through every available channel exactly once
+  if (config.type === 'JSON') {
+    void probeJsonSupport(api).then(({supported, error}) => {
+      if (supported) return;
+      const problem = new Error(
+        `prisma-extension-redis: ${JSON_UNSUPPORTED_HINT}${
+          error ? ` (probe failed with: ${error.message})` : ''
+        }`,
+      );
+      console.warn(problem.message);
+      logger.warn(problem.message);
+      if (config.onError) config.onError(problem);
+    });
+  }
 
   const getKey = getKeyGen(delimiter, caseTransformer, prefix);
   const getAutoKey = getAutoKeyGen(getKey);
@@ -219,9 +240,10 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
         }),
 
       /**
-       * Check Redis connection health.
+       * Check Redis connection health. When the extension is configured
+       * with type JSON, the result also reports RedisJSON support.
        */
-      healthCheck: () => checkHealth(api),
+      healthCheck: () => checkHealth(api, {checkJson: config.type === 'JSON'}),
 
       /**
        * Warm the cache with predefined queries.

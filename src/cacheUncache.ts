@@ -2,7 +2,11 @@ import type {JsArgs, Operation} from '@prisma/client/runtime/client';
 import type {getAutoKeyGen} from './cacheKey';
 import {globCheck} from './cacheKey';
 import {coalesce} from './coalesce';
-import {DEFAULT_CHUNK_SIZE, DEFAULT_MAX_CONCURRENT_BATCHES} from './constants';
+import {
+  DEFAULT_CHUNK_SIZE,
+  DEFAULT_MAX_CONCURRENT_BATCHES,
+  JSON_UNSUPPORTED_HINT,
+} from './constants';
 import {createDebugLogger, noopLogger} from './debug';
 import {getServerClock, type RedisApi, resolveRedisApi} from './redisApi';
 import {
@@ -177,6 +181,21 @@ const commands: Record<CacheType, CacheCommandSet> = {
 const toError = (err: unknown): Error =>
   err instanceof Error ? err : new Error(String(err));
 
+const jsonHintDelivered = new WeakSet<RedisApi>();
+
+/**
+ * Attaches the RedisJSON remedy to the first unknown-command JSON error
+ * seen per client, so a misconfigured type: 'JSON' is diagnosable from
+ * any error channel without repeating the hint on every operation.
+ */
+const withJsonHint = (api: RedisApi, error: unknown): unknown => {
+  const cause = toError(error);
+  if (!/unknown command.*JSON\./i.test(cause.message)) return error;
+  if (jsonHintDelivered.has(api)) return error;
+  jsonHintDelivered.add(api);
+  return new Error(`${cause.message} — ${JSON_UNSUPPORTED_HINT}`);
+};
+
 /**
  * Writes a value to the cache directly, without an accompanying
  * database operation. The entry uses the same envelope cached reads
@@ -287,10 +306,11 @@ export const getCache = async ({
     error: unknown,
     message: string,
   ): void => {
-    errors[field] = toError(error);
-    logger.error(message, {key, error});
+    const enriched = withJsonHint(api, error);
+    errors[field] = toError(enriched);
+    logger.error(message, {key, error: enriched});
     if (metricsCollector) metricsCollector.recordError();
-    if (onError) onError(error);
+    if (onError) onError(enriched);
   };
 
   let cached: string | null = null;
