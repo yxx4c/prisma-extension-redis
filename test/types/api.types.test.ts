@@ -49,6 +49,23 @@ const typeOnly = async () => {
     client: 'redis://localhost:6379',
   });
 
+  // The interactive transaction client keeps model methods and their
+  // inference through the extension (issue #1's recipe must not
+  // resolve to unknown)
+  type ExtendedTransactionClient = Parameters<
+    Parameters<(typeof prisma)['$transaction']>[0]
+  >[0];
+  const assertTransactionClientTyped = async (
+    tx: ExtendedTransactionClient,
+  ) => {
+    const found = await tx.user.findFirst({where: {id: 1}});
+    const txEmail: string | undefined = found?.email;
+    return txEmail;
+  };
+  await prisma.$transaction(async tx => {
+    await tx.user.findFirst({where: {id: 1}});
+  });
+
   // includedModels is typed and mutually understood with models
   PrismaExtensionRedis({
     config: {
@@ -122,7 +139,15 @@ const typeOnly = async () => {
     client: api,
   });
 
-  return {cachedAt, email, exactClient, keyParams, uncacheParams, cacheParams};
+  return {
+    cachedAt,
+    email,
+    exactClient,
+    assertTransactionClientTyped,
+    keyParams,
+    uncacheParams,
+    cacheParams,
+  };
 };
 
 test('public API type surface compiles', () => {
