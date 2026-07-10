@@ -58,6 +58,22 @@ export const validateConfig = (config: CacheConfig): void => {
 
   // Validate auto-cache config if it's an object
   if (typeof config.auto === 'object' && config.auto !== null) {
+    if (config.auto.includedModels && config.auto.excludedModels) {
+      throw new ValidationError(
+        'auto.includedModels and auto.excludedModels are mutually exclusive',
+      );
+    }
+
+    if (config.auto.includedModels && config.auto.models) {
+      for (const modelConfig of config.auto.models) {
+        if (!config.auto.includedModels.includes(modelConfig.model)) {
+          throw new ValidationError(
+            `auto.models[${modelConfig.model}] is not listed in auto.includedModels`,
+          );
+        }
+      }
+    }
+
     if (config.auto.ttl !== undefined && config.auto.ttl < 0) {
       throw new ValidationError('auto.ttl must be a non-negative number');
     }

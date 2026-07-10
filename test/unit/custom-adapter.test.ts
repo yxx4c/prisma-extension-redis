@@ -169,6 +169,42 @@ describe('Custom RedisApi adapter (client-agnostic end-to-end)', () => {
     expect(cleanup.deletedCount).toBe(0);
   });
 
+  test('includedModels whitelists auto-caching end-to-end', async () => {
+    const whitelisted = createFakeRedisApi();
+    const excludedByOmission = createFakeRedisApi();
+
+    const cachingPrisma = new PrismaClient({adapter}).$extends(
+      PrismaExtensionRedis({
+        config: {
+          ttl: 60,
+          stale: 30,
+          auto: {includedModels: ['User']},
+          type: 'JSON',
+          cacheKey: {prefix: 'whitelist_on'},
+        },
+        client: whitelisted,
+      }),
+    );
+    const nonCachingPrisma = new PrismaClient({adapter}).$extends(
+      PrismaExtensionRedis({
+        config: {
+          ttl: 60,
+          stale: 30,
+          auto: {includedModels: ['Post']},
+          type: 'JSON',
+          cacheKey: {prefix: 'whitelist_off'},
+        },
+        client: excludedByOmission,
+      }),
+    );
+
+    await cachingPrisma.user.findUnique({where: {email: userOne.email}});
+    await nonCachingPrisma.user.findUnique({where: {email: userOne.email}});
+
+    expect(whitelisted.store.size).toBeGreaterThan(0);
+    expect(excludedByOmission.store.size).toBe(0);
+  });
+
   test('health check works without INFO support', async () => {
     const health = await prisma.healthCheck();
     expect(health.status).toBe('healthy');

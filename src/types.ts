@@ -488,7 +488,14 @@ export interface ModelConfig {
 export type AutoCacheConfig =
   | {
       /**
-       * Default excluded models
+       * Only auto-cache these models; every model not listed is left
+       * uncached (per-query cache flags still override). Mutually
+       * exclusive with excludedModels
+       */
+      includedModels?: string[];
+
+      /**
+       * Default excluded models. Mutually exclusive with includedModels
        */
       excludedModels?: string[];
 

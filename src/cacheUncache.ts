@@ -552,6 +552,7 @@ export const isAutoCacheEnabled = ({
       filterOperations(...AUTO_OPERATIONS)(auto.excludedOperations).includes(
         operation as autoOperations,
       ) &&
+      (!auto.includedModels || auto.includedModels.includes(model)) &&
       !auto.excludedModels?.includes(model) &&
       !auto.models
         ?.find(m => m.model === model)

@@ -521,9 +521,10 @@ console.log(`Deleted ${result.deletedCount} orphaned keys`);
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `excludedModels` | `string[]` | `[]` | Models to exclude from auto-caching |
+| `includedModels` | `string[]` | - | Only auto-cache these models; mutually exclusive with `excludedModels` |
+| `excludedModels` | `string[]` | `[]` | Models to exclude from auto-caching; mutually exclusive with `includedModels` |
 | `excludedOperations` | `Operation[]` | `[]` | Operations to exclude globally |
-| `models` | `ModelConfig[]` | `[]` | Model-specific configurations |
+| `models` | `ModelConfig[]` | `[]` | Per-model ttl/stale/operation overrides. Customizes models that auto-caching already selected; it does not select them |
 | `ttl` | `number` | Config TTL | Default TTL for auto-cached queries |
 | `stale` | `number` | Config stale | Default extra stale window for auto-cached queries |
 
