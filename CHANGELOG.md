@@ -1,3 +1,10 @@
+## [4.2.1-next.2](https://github.com/yxx4c/prisma-extension-redis/compare/v4.2.1-next.1...v4.2.1-next.2) (2026-07-10)
+
+
+### Bug Fixes
+
+* correct ESM type resolution and typed client acceptance ([a9439ec](https://github.com/yxx4c/prisma-extension-redis/commit/a9439ec6568320102f159677c13fd981d588eb95))
+
 ## [4.2.1-next.1](https://github.com/yxx4c/prisma-extension-redis/compare/v4.2.0...v4.2.1-next.1) (2026-07-10)
 
 
