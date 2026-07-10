@@ -6,7 +6,7 @@
     "type": "git",
     "url": "git+https://github.com/yxx4c/prisma-extension-redis.git"
   },
-  "homepage": "https://github.com/yxx4c/prisma-extension-redis",
+  "homepage": "https://yxx4c.github.io/prisma-extension-redis/",
   "bugs": "https://github.com/yxx4c/prisma-extension-redis/issues",
   "author": {
     "name": "caxxy",
@@ -79,7 +79,10 @@
     "posttest": "bun run check && bun run check:types",
     "release": "semantic-release",
     "check:types": "tsc --noEmit -p tsconfig.typecheck.json",
-    "test:node": "node --test test/node/*.mjs"
+    "test:node": "node --test test/node/*.mjs",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
     "@amanda-mitchell/semantic-release-npm-multiple": "^3.17.0",
@@ -98,7 +101,8 @@
     "prisma": "^7.8.0",
     "semantic-release": "^25.0.5",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitepress": "^2.0.0-alpha.18"
   },
   "publishConfig": {
     "access": "public"
