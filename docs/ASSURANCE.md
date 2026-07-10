@@ -33,9 +33,10 @@ Plus, on every CI run: a `node:test` smoke suite against the **built dist** (CJS
 
 | Metric | Result |
 |---|---|
-| Requests | ~56 million — zero failures |
-| Heap | bounded, oscillating 9–18MB with GC; no growth trend |
-| Database executions | ~1 per key per TTL window throughout |
+| Requests | **55,334,526** (~15.4k req/s sustained) — zero failures |
+| Database executions | 543,254 (~1 per key per TTL window throughout) |
+| Invalidation storms | 239 pattern sweeps, 7,199 entries removed mid-traffic |
+| Heap | oscillated 7–18MB across the hour and **ended below the post-warmup baseline** (40MB → 3MB after final GC) — no growth trend, no leak |
 
 ## Chaos (dependency failure)
 
