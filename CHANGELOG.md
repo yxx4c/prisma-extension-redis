@@ -1,3 +1,28 @@
+# [5.0.0-next.1](https://github.com/yxx4c/prisma-extension-redis/compare/v4.2.1-next.2...v5.0.0-next.1) (2026-07-10)
+
+
+* feat(client)!: bring your own Redis client; zero runtime dependencies ([5c44602](https://github.com/yxx4c/prisma-extension-redis/commit/5c446026f45e743a376a4ade932976d927e92e95))
+
+
+### Bug Fixes
+
+* **maintenance:** match key-generator casing in patterns and comparisons ([b6f4caf](https://github.com/yxx4c/prisma-extension-redis/commit/b6f4cafa72dba6a3751cd6c569df75e60b50ec73))
+
+
+### Features
+
+* **auto:** invalidateOnWrite purges a model's auto-cache after writes ([2b6a89f](https://github.com/yxx4c/prisma-extension-redis/commit/2b6a89f89570a31ca11756f3d8c03109ba16508b))
+* **diagnostics:** fail fast when the server lacks RedisJSON ([5827e22](https://github.com/yxx4c/prisma-extension-redis/commit/5827e229fbe6144be2156d7ed47ca8759f0f724a))
+
+
+### BREAKING CHANGES
+
+* the client option accepts client instances only.
+Replace client: {host, port} or client: 'redis://...' with
+client: new Redis({host, port}) (npm i iovalkey or ioredis), an
+@upstash/redis instance, or a custom RedisApi implementation. See
+docs/MIGRATION.md.
+
 ## [4.2.1-next.2](https://github.com/yxx4c/prisma-extension-redis/compare/v4.2.1-next.1...v4.2.1-next.2) (2026-07-10)
 
 
