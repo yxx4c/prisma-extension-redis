@@ -1,3 +1,10 @@
+## [4.2.1-next.1](https://github.com/yxx4c/prisma-extension-redis/compare/v4.2.0...v4.2.1-next.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* harden client resolution, cache semantics, and invalidation lifecycles ([aabfda0](https://github.com/yxx4c/prisma-extension-redis/commit/aabfda0a090ab9adc12c22e69bb15f9eb24f969f))
+
 # [4.2.0](https://github.com/yxx4c/prisma-extension-redis/compare/v4.1.0...v4.2.0) (2026-07-10)
 
 
