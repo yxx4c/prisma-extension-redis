@@ -5,10 +5,11 @@ This document provides detailed information about all configuration options for 
 ## Quick Start Configuration
 
 ```typescript
-import { PrismaClient } from '@prisma/client';
+import Redis from 'iovalkey'; // or ioredis, or @upstash/redis
 import { PrismaExtensionRedis } from 'prisma-extension-redis';
+import { PrismaClient } from './generated/prisma/client';
 
-const prisma = new PrismaClient().$extends(
+const prisma = new PrismaClient({ adapter }).$extends(
   PrismaExtensionRedis({
     config: {
       ttl: 60,
@@ -16,10 +17,10 @@ const prisma = new PrismaClient().$extends(
       type: 'JSON',
       auto: true,
     },
-    client: {
+    client: new Redis({
       host: 'localhost',
       port: 6379,
-    },
+    }),
   })
 );
 ```
@@ -43,22 +44,23 @@ const prisma = new PrismaClient().$extends(
 | `chunkSize` | `number` | No | `1000` | Batch size for pattern deletion |
 | `maxConcurrentBatches` | `number` | No | `5` | Concurrent deletion batches |
 
-### `client` Object
+### `client` Option
 
-The client configuration accepts either a connection string or Redis options:
+The client is a Redis client instance you construct and own — an ioredis-compatible instance, an `@upstash/redis` client, or any custom `RedisApi` implementation (see the [adapters guide](ADAPTERS.md)):
 
 ```typescript
-// Connection string
-client: 'redis://localhost:6379'
+import Redis from 'iovalkey'; // or ioredis
 
-// Or Redis options object
-client: {
+client: new Redis({
   host: 'localhost',
   port: 6379,
   password: 'secret',
   db: 0,
   tls: {},
-}
+})
+
+// or a connection URL, handled by your client
+client: new Redis('redis://localhost:6379')
 ```
 
 ## TTL and Stale Configuration
@@ -147,6 +149,7 @@ config: {
   auto: {
     ttl: 60,                                    // Default TTL for auto-cached queries
     stale: 30,                                  // Default stale time
+    invalidateOnWrite: true,                    // Writes purge the model's auto-cache
     excludedModels: ['Session', 'Token'],       // Models to exclude
     excludedOperations: ['count', 'aggregate'], // Operations to exclude
     models: [
@@ -159,6 +162,7 @@ config: {
       {
         model: 'Product',
         ttl: 3600,                              // Products cached for 1 hour
+        invalidateOnWrite: false,               // Keep Product entries until they expire
       },
     ],
   },
@@ -172,10 +176,21 @@ config: {
 |--------|------|---------|-------------|
 | `ttl` | `number` | Config TTL | Default TTL for auto-cached queries |
 | `stale` | `number` | Config stale | Default stale time |
+| `invalidateOnWrite` | `boolean` | `false` | Purge a model's auto-cached entries after a successful write to it (see below) |
 | `includedModels` | `string[]` | - | Only auto-cache these models; mutually exclusive with `excludedModels` |
 | `excludedModels` | `string[]` | `[]` | Models to exclude from auto-caching; mutually exclusive with `includedModels` |
 | `excludedOperations` | `Operation[]` | `[]` | Operations to exclude globally |
-| `models` | `ModelConfig[]` | `[]` | Per-model ttl/stale/operation overrides. Customizes models that auto-caching already selected; it does not select them |
+| `models` | `ModelConfig[]` | `[]` | Per-model ttl/stale/operation/invalidateOnWrite overrides. Customizes models that auto-caching already selected; it does not select them |
+
+### Write Invalidation (`invalidateOnWrite`)
+
+With `invalidateOnWrite: true`, any successful write (`create`, `update`, `delete`, `upsert`, and their `Many` variants) purges the auto-cached entries of the model it touched, so subsequent auto-cached reads observe the write immediately instead of waiting out `ttl + stale`. Semantics to know:
+
+- **Scope**: only auto-cache keys (`prefix:model:op:…`) are removed. Custom keys — including custom keys namespaced under the same model — are never touched; keep invalidating those with `uncache` (both compose: explicit `uncache` keys on the same write are removed in the same pass).
+- **Ordering**: invalidation runs after the write succeeds; a failed write purges nothing. The write awaits the purge, giving read-your-writes behavior for auto-cached queries.
+- **Relations are not traced**: a cached `Post` result that `include`d its `User` is a *Post* entry — writing to `User` does not purge it. Model the coupling explicitly (per-model `invalidateOnWrite`, `uncache` patterns, or shorter TTLs on relation-heavy models).
+- **Transactions**: the purge fires per operation when it succeeds inside the transaction, not at commit. A rolled-back transaction may therefore have purged entries that were still valid — the safe failure direction (an unnecessary cache miss, never a stale read).
+- **Excluded models** (via `excludedModels`/`includedModels`) never invalidate — they have no auto-cache entries to purge.
 
 ### Cacheable Operations
 
@@ -359,11 +374,11 @@ const prisma = new PrismaClient().$extends(
       chunkSize: 1000,
       maxConcurrentBatches: 5,
     },
-    client: {
+    client: new Redis({
       host: process.env.REDIS_HOST,
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
-    },
+    }),
   })
 );
 ```

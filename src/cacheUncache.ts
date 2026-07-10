@@ -2,7 +2,11 @@ import type {JsArgs, Operation} from '@prisma/client/runtime/client';
 import type {getAutoKeyGen} from './cacheKey';
 import {globCheck} from './cacheKey';
 import {coalesce} from './coalesce';
-import {DEFAULT_CHUNK_SIZE, DEFAULT_MAX_CONCURRENT_BATCHES} from './constants';
+import {
+  DEFAULT_CHUNK_SIZE,
+  DEFAULT_MAX_CONCURRENT_BATCHES,
+  JSON_UNSUPPORTED_HINT,
+} from './constants';
 import {createDebugLogger, noopLogger} from './debug';
 import {getServerClock, type RedisApi, resolveRedisApi} from './redisApi';
 import {
@@ -29,8 +33,38 @@ import {validateCacheOptions} from './validation';
 /**
  * Tracks in-flight background refresh operations to prevent duplicate
  * database queries when multiple concurrent requests hit stale cache.
+ * Scoped per resolved client so identical key strings on different
+ * clients (or extension instances) never contaminate each other.
  */
-const backgroundRefreshes = new Map<string, Promise<void>>();
+const backgroundRefreshScopes = new WeakMap<
+  RedisApi,
+  Map<string, Promise<void>>
+>();
+
+const backgroundRefreshesFor = (api: RedisApi): Map<string, Promise<void>> => {
+  let scope = backgroundRefreshScopes.get(api);
+  if (!scope) {
+    scope = new Map();
+    backgroundRefreshScopes.set(api, scope);
+  }
+  return scope;
+};
+
+/**
+ * In-flight read coalescing, scoped per resolved client for the same
+ * reason; the map key additionally carries the cache type so JSON and
+ * STRING envelopes for one key never share an execution.
+ */
+const coalesceScopes = new WeakMap<RedisApi, Map<string, Promise<unknown>>>();
+
+const coalesceScopeFor = (api: RedisApi): Map<string, Promise<unknown>> => {
+  let scope = coalesceScopes.get(api);
+  if (!scope) {
+    scope = new Map();
+    coalesceScopes.set(api, scope);
+  }
+  return scope;
+};
 
 export const filterOperations =
   <T extends Operation[]>(...ops: T) =>
@@ -67,19 +101,25 @@ export const unlinkPatterns = ({
         : Promise.resolve();
     };
 
-    let cursor = '0';
-    do {
-      const page = await api.scan(cursor, pattern, chunkSize);
-      cursor = page.cursor;
-      buffer.push(...page.keys);
-      while (buffer.length >= chunkSize) {
-        await execBatch(buffer.splice(0, chunkSize));
-      }
-    } while (cursor !== '0');
+    try {
+      let cursor = '0';
+      do {
+        const page = await api.scan(cursor, pattern, chunkSize);
+        cursor = page.cursor;
+        buffer.push(...page.keys);
+        while (buffer.length >= chunkSize) {
+          await execBatch(buffer.splice(0, chunkSize));
+        }
+      } while (cursor !== '0');
 
-    if (buffer.length) await execBatch(buffer.splice(0, buffer.length));
-    const counts = await Promise.all(allBatches);
-    return counts.reduce((sum, count) => sum + count, 0);
+      if (buffer.length) await execBatch(buffer.splice(0, buffer.length));
+      const counts = await Promise.all(allBatches);
+      return counts.reduce((sum, count) => sum + count, 0);
+    } catch (error) {
+      // Drain in-flight batches so none reject unobserved
+      await Promise.allSettled(allBatches);
+      throw error;
+    }
   });
 };
 
@@ -140,6 +180,21 @@ const commands: Record<CacheType, CacheCommandSet> = {
  */
 const toError = (err: unknown): Error =>
   err instanceof Error ? err : new Error(String(err));
+
+const jsonHintDelivered = new WeakSet<RedisApi>();
+
+/**
+ * Attaches the RedisJSON remedy to the first unknown-command JSON error
+ * seen per client, so a misconfigured type: 'JSON' is diagnosable from
+ * any error channel without repeating the hint on every operation.
+ */
+const withJsonHint = (api: RedisApi, error: unknown): unknown => {
+  const cause = toError(error);
+  if (!/unknown command.*JSON\./i.test(cause.message)) return error;
+  if (jsonHintDelivered.has(api)) return error;
+  jsonHintDelivered.add(api);
+  return new Error(`${cause.message} — ${JSON_UNSUPPORTED_HINT}`);
+};
 
 /**
  * Writes a value to the cache directly, without an accompanying
@@ -251,10 +306,11 @@ export const getCache = async ({
     error: unknown,
     message: string,
   ): void => {
-    errors[field] = toError(error);
-    logger.error(message, {key, error});
+    const enriched = withJsonHint(api, error);
+    errors[field] = toError(enriched);
+    logger.error(message, {key, error: enriched});
     if (metricsCollector) metricsCollector.recordError();
-    if (onError) onError(error);
+    if (onError) onError(enriched);
   };
 
   let cached: string | null = null;
@@ -385,7 +441,8 @@ export const getCache = async ({
         staleWindow: cacheStale,
       });
       // Use a unique key to track this specific background refresh
-      const refreshKey = `refresh:${key}`;
+      const backgroundRefreshes = backgroundRefreshesFor(api);
+      const refreshKey = `${type}\u0000${key}`;
 
       // Only start a background refresh if one isn't already in flight
       // This prevents duplicate DB queries when multiple concurrent requests
@@ -438,11 +495,17 @@ export const getCache = async ({
  * Wraps getCache with promise coalescing to prevent duplicate database
  * queries when multiple identical requests arrive simultaneously.
  */
-export const promiseCoalesceGetCache = ({
-  key,
-  ...rest
-}: GetDataParams): Promise<InternalCacheResult> =>
-  coalesce(key, () => getCache({key, ...rest}));
+export const promiseCoalesceGetCache = (
+  params: GetDataParams,
+): Promise<InternalCacheResult> => {
+  const {api} = resolveRedisApi(params.redis);
+  const scope = coalesceScopeFor(api);
+  return coalesce(
+    `${params.config.type}\u0000${params.key}`,
+    () => getCache(params),
+    scope,
+  ) as Promise<InternalCacheResult>;
+};
 
 /**
  * Handles auto-caching for Prisma operations based on configuration.
@@ -538,6 +601,40 @@ export const customUncacheAction = async ({
   return await query({...args, uncache: undefined, meta: undefined});
 };
 
+/**
+ * Runs a write operation and, once it succeeds, purges the model's
+ * auto-cache entries by pattern. Explicit uncache keys passed on the
+ * query are removed in the same pass. Runs after the write (a failed
+ * write must not purge), and like customUncacheAction it resolves with
+ * the plain Prisma result.
+ */
+export const autoInvalidateAction = async (
+  {redis, options: {args, query}, config}: ActionParams,
+  modelPattern: string,
+) => {
+  const result = await query({
+    ...args,
+    cache: undefined,
+    uncache: undefined,
+    meta: undefined,
+  });
+
+  const explicit =
+    args.uncache && typeof args.uncache === 'object'
+      ? (args.uncache as unknown as UncacheOptions).uncacheKeys
+      : [];
+
+  await uncache({
+    redis,
+    uncacheKeys: [modelPattern, ...explicit],
+    hasPattern: true,
+    chunkSize: config.chunkSize,
+    maxConcurrentBatches: config.maxConcurrentBatches,
+  });
+
+  return result;
+};
+
 export const isAutoCacheEnabled = ({
   auto,
   options: {args: xArgs, model, operation},
@@ -577,3 +674,26 @@ export const isCustomUncacheEnabled = ({
   !!xArgs.uncache &&
   typeof xArgs.uncache === 'object' &&
   UNCACHE_OPERATIONS.includes(operation as (typeof UNCACHE_OPERATIONS)[number]);
+
+export const isAutoInvalidateEnabled = ({
+  auto,
+  options: {model, operation},
+}: ActionCheckParams) => {
+  if (typeof auto !== 'object' || auto === null) return false;
+  if (
+    !UNCACHE_OPERATIONS.includes(
+      operation as (typeof UNCACHE_OPERATIONS)[number],
+    )
+  )
+    return false;
+
+  const modelOverride = auto.models?.find(
+    m => m.model === model,
+  )?.invalidateOnWrite;
+  if (!(modelOverride ?? auto.invalidateOnWrite)) return false;
+
+  if (auto.includedModels && !auto.includedModels.includes(model)) return false;
+  if (auto.excludedModels?.includes(model)) return false;
+
+  return true;
+};

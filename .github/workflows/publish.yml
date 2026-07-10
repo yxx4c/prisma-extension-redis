@@ -13,11 +13,18 @@ permissions:
 
 jobs:
   test:
-    name: test
+    name: test (${{ matrix.cfg.label }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - {label: dragonfly, image: "docker.dragonflydb.io/dragonflydb/dragonfly", prisma: ""}
+          - {label: redis-stack, image: "redis/redis-stack-server:latest", prisma: ""}
+          - {label: prisma-floor, image: "docker.dragonflydb.io/dragonflydb/dragonfly", prisma: "7.2.0"}
     services:
-      dragonfly:
-        image: "docker.dragonflydb.io/dragonflydb/dragonfly"
+      redis:
+        image: ${{ matrix.cfg.image }}
         ports:
           - 6379:6379
         options: >-
@@ -41,13 +48,17 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set Up Bun Package Manager
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install Project Dependencies
         run: bun install --frozen-lockfile
+
+      - name: Pin Prisma to the peer floor
+        if: matrix.cfg.prisma != ''
+        run: bun add -d prisma@${{ matrix.cfg.prisma }} @prisma/client@${{ matrix.cfg.prisma }} @prisma/adapter-pg@${{ matrix.cfg.prisma }}
 
       - name: Run Test Suite
         env:
@@ -55,9 +66,69 @@ jobs:
           POSTGRES_SERVICE_URI: postgres://user:password@localhost:5432/testdb
         run: bun run test
 
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set Up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+
+      - name: Set Up Bun Package Manager
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - name: Install Project Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        env:
+          POSTGRES_SERVICE_URI: postgres://user:password@localhost:5432/testdb
+        run: bunx prisma generate --config ./test/prisma/prisma.config.ts
+
+      - name: Build
+        run: bun run build
+
+      - name: Lint
+        run: bun run check
+
+      - name: Typecheck
+        run: bun run check:types
+
+      - name: Audit Dependencies
+        run: bun audit
+
+      - name: Lint Package Exports
+        run: bunx publint
+
+      - name: Check Type Resolution
+        run: bunx --yes @arethetypeswrong/cli --pack .
+
+      - name: Node Smoke Tests
+        run: bun run test:node
+
+      - name: Upstash Live Conformance
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+        run: bun test test/unit/upstash-live.test.ts
+
+      - name: Verify Packed Package
+        run: |
+          mkdir -p /tmp/pkg
+          npm pack --pack-destination /tmp/pkg
+          mkdir /tmp/consumer && cd /tmp/consumer
+          npm init -y >/dev/null
+          npm install /tmp/pkg/*.tgz @prisma/client@^7.2.0 --no-audit --no-fund --loglevel=error
+          node -e "const m=require('prisma-extension-redis'); if (typeof m.PrismaExtensionRedis !== 'function') process.exit(1)"
+          node --input-type=module -e "import {PrismaExtensionRedis} from 'prisma-extension-redis'; if (typeof PrismaExtensionRedis !== 'function') process.exit(1)"
+
   publish:
     name: publish
-    needs: test
+    needs: [test, quality]
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -67,15 +138,15 @@ jobs:
       id-token: write
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set Up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 22
 
       - name: Set Up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install Project Dependencies
         run: bun install --frozen-lockfile

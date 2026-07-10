@@ -1,5 +1,6 @@
 import {describe, expect, test} from 'bun:test';
 import {uncache} from '../../src';
+import {isCustomUncacheEnabled} from '../../src/cacheUncache';
 import type {RedisApi} from '../../src/redisApi';
 import {createFakeRedisApi} from '../fakeRedisApi';
 
@@ -109,5 +110,19 @@ describe('uncache', () => {
 
     expect(deleted).toBe(2);
     expect(scanned).toEqual(['user:?']);
+  });
+});
+
+describe('uncache operation coverage', () => {
+  test('updateManyAndReturn supports the uncache argument', () => {
+    const enabled = isCustomUncacheEnabled({
+      options: {
+        args: {uncache: {uncacheKeys: ['k']}},
+        model: 'User',
+        operation: 'updateManyAndReturn',
+      } as never,
+    });
+
+    expect(enabled).toBe(true);
   });
 });

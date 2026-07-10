@@ -1,19 +1,29 @@
 import {Prisma} from '@prisma/client/extension';
-import type Redis from 'iovalkey';
-import {getAutoKeyGen, getKeyGen, getKeyPatternGen} from './cacheKey';
+import {
+  getAutoKeyGen,
+  getKeyGen,
+  getKeyPatternGen,
+  snakeCase,
+} from './cacheKey';
 import {
   autoCacheAction,
+  autoInvalidateAction,
   cache,
   customCacheAction,
   customUncacheAction,
   isAutoCacheEnabled,
+  isAutoInvalidateEnabled,
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
   uncache,
 } from './cacheUncache';
 import type {WarmOptions, WarmQuery} from './cacheWarmer';
 import {createCacheWarmer} from './cacheWarmer';
-import {DEFAULT_DELIMITER, DEFAULT_PREFIX} from './constants';
+import {
+  DEFAULT_DELIMITER,
+  DEFAULT_PREFIX,
+  JSON_UNSUPPORTED_HINT,
+} from './constants';
 import {createDebugLogger, noopLogger} from './debug';
 import {checkHealth} from './healthCheck';
 import type {CleanupOptions, FlushModelOptions} from './maintenance';
@@ -22,7 +32,12 @@ import {
   flushModelCache,
   getCacheStats,
 } from './maintenance';
-import {getServerClock, resolveRedisApi} from './redisApi';
+import {
+  getServerClock,
+  probeJsonSupport,
+  type RedisClientInput,
+  resolveRedisApi,
+} from './redisApi';
 import type {
   CacheParams,
   ExtendedModel,
@@ -37,27 +52,31 @@ import {validateConfig} from './validation';
  *
  * @param options - Configuration options for the extension
  * @param options.config - Cache configuration (ttl, stale, auto, type, etc.)
- * @param options.client - Redis connection options (host, port, etc.)
+ * @param options.client - Your Redis client instance (ioredis-family,
+ * Upstash-style, or a custom RedisApi implementation)
  * @returns A Prisma extension with caching methods and automatic query caching
  *
  * @example
  * ```typescript
- * import { PrismaClient } from '@prisma/client';
+ * import { PrismaClient } from './generated/prisma/client';
  * import { PrismaExtensionRedis } from 'prisma-extension-redis';
+ * import { Redis } from 'iovalkey'; // or ioredis, or @upstash/redis
  *
- * const prisma = new PrismaClient().$extends(
+ * const prisma = new PrismaClient({ adapter }).$extends(
  *   PrismaExtensionRedis({
  *     config: { ttl: 60, stale: 30, auto: true, type: 'JSON' },
- *     client: { host: 'localhost', port: 6379 },
+ *     client: new Redis({ host: 'localhost', port: 6379 }),
  *   })
  * );
  * ```
  */
-export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
+export const PrismaExtensionRedis = <C extends RedisClientInput>(
+  options: PrismaExtensionRedisOptions<C>,
+) => {
   const {
     config,
     config: {auto, cacheKey},
-    client: redisOptions,
+    client,
   } = options;
 
   // Validate configuration at initialization
@@ -65,11 +84,10 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
 
   const {delimiter, caseTransformer, prefix} = cacheKey ?? {};
 
-  // Accepts RedisOptions/connection string (an iovalkey client is
-  // constructed), an ioredis-compatible instance, an Upstash-style REST
-  // client, or a custom RedisApi implementation
-  const {api, raw} = resolveRedisApi(redisOptions);
-  const redis = raw as Redis;
+  // Accepts an ioredis-compatible instance, an Upstash-style REST
+  // client, or a custom RedisApi implementation — always caller-owned
+  const {api} = resolveRedisApi(client);
+  const redis = client;
 
   // Keep cache timestamps aligned with the Redis server's clock; sync
   // failures degrade to the local clock and are reported for visibility
@@ -82,6 +100,23 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   });
   void clock.prime();
 
+  // A JSON config against a server without RedisJSON does not crash — it
+  // silently serves every query from the database, so the misconfiguration
+  // is announced through every available channel exactly once
+  if (config.type === 'JSON') {
+    void probeJsonSupport(api).then(({supported, error}) => {
+      if (supported) return;
+      const problem = new Error(
+        `prisma-extension-redis: ${JSON_UNSUPPORTED_HINT}${
+          error ? ` (probe failed with: ${error.message})` : ''
+        }`,
+      );
+      console.warn(problem.message);
+      logger.warn(problem.message);
+      if (config.onError) config.onError(problem);
+    });
+  }
+
   const getKey = getKeyGen(delimiter, caseTransformer, prefix);
   const getAutoKey = getAutoKeyGen(getKey);
   const getKeyPattern = getKeyPatternGen(delimiter, caseTransformer, prefix);
@@ -90,12 +125,21 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   const configuredPrefix = prefix ?? DEFAULT_PREFIX;
   const configuredDelimiter = delimiter ?? DEFAULT_DELIMITER;
 
+  // Auto keys are `prefix:model:op:operation:key:hash` after the case
+  // transformer; the op segment scopes the pattern to auto-cache entries
+  // so custom keys under the same model survive write invalidation
+  const transform = caseTransformer ?? snakeCase;
+  const autoKeyPatternFor = (model: string) =>
+    [transform(configuredPrefix), transform(model), transform('op'), '*'].join(
+      configuredDelimiter,
+    );
+
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',
     client: {
       /**
-       * The Redis client you supplied (or the iovalkey instance
-       * constructed from your options) for direct access if needed.
+       * The Redis client you supplied, exactly as typed, for direct
+       * access if needed.
        */
       redis,
 
@@ -141,7 +185,12 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
        * @returns Cache statistics including total keys, keys by model, and estimated size
        */
       getCacheStats: () =>
-        getCacheStats(api, configuredPrefix, configuredDelimiter),
+        getCacheStats(
+          api,
+          configuredPrefix,
+          configuredDelimiter,
+          caseTransformer,
+        ),
 
       /**
        * Clean up cache keys for models that no longer exist in the schema.
@@ -155,6 +204,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
           validModels,
           prefix: configuredPrefix,
           delimiter: configuredDelimiter,
+          caseTransformer,
           ...opts,
         }),
 
@@ -170,6 +220,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
           model,
           prefix: configuredPrefix,
           delimiter: configuredDelimiter,
+          caseTransformer,
           ...opts,
         }),
 
@@ -203,12 +254,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
        * });
        * ```
        */
-      uncache: (
-        options: Omit<
-          UncacheParams,
-          'redis' | 'chunkSize' | 'maxConcurrentBatches'
-        >,
-      ) =>
+      uncache: (options: Omit<UncacheParams, 'redis'>) =>
         uncache({
           redis: api,
           chunkSize: config.chunkSize,
@@ -217,9 +263,10 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
         }),
 
       /**
-       * Check Redis connection health.
+       * Check Redis connection health. When the extension is configured
+       * with type JSON, the result also reports RedisJSON support.
        */
-      healthCheck: () => checkHealth(api),
+      healthCheck: () => checkHealth(api, {checkJson: config.type === 'JSON'}),
 
       /**
        * Warm the cache with predefined queries.
@@ -275,6 +322,12 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
               config,
             });
 
+          if (isAutoInvalidateEnabled({auto, options}))
+            return autoInvalidateAction(
+              {redis: api, options, config},
+              autoKeyPatternFor(options.model),
+            );
+
           if (isCustomUncacheEnabled({options}))
             return customUncacheAction({
               redis: api,
@@ -287,6 +340,7 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
               ...args,
               cache: undefined,
               meta: undefined,
+              uncache: undefined,
             });
 
           // recache re-runs the query; uncache is a no-op because nothing

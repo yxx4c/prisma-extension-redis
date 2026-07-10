@@ -1,10 +1,12 @@
 import {describe, expect, mock, test} from 'bun:test';
 import {getCache, PrismaExtensionRedis, unlinkPatterns} from '../../src';
 import {
+  fromIoValkeyLike,
   fromUpstashLike,
   resolveRedisApi,
   type UpstashLike,
 } from '../../src/redisApi';
+import {createFakeRedisApi} from '../fakeRedisApi';
 import {delay} from '../functions';
 
 /**
@@ -286,32 +288,129 @@ describe('Upstash-style client support', () => {
   });
 });
 
-describe('resolveRedisApi options-object input', () => {
-  test('plain options objects construct an iovalkey client', async () => {
-    const uri = new URL(
-      process.env.REDIS_SERVICE_URI ?? 'redis://localhost:6379',
-    );
-    const {api, raw} = resolveRedisApi({
-      host: uri.hostname,
-      port: Number(uri.port || 6379),
-    });
-
-    expect(await api.ping()).toBe('PONG');
-    await (raw as {quit(): Promise<unknown>}).quit();
-  });
-});
-
 describe('resolveRedisApi rejection', () => {
-  test('throws a TypeError for unrecognized client objects', () => {
+  test('throws a TypeError for objects exposing client verbs with the wrong shape', () => {
     const misShaped = {
-      connect: async () => {},
-      query: async () => {},
+      get: async () => null,
+      set: async () => {},
     };
 
     expect(() => resolveRedisApi(misShaped as never)).toThrow(TypeError);
     expect(() => resolveRedisApi(misShaped as never)).toThrow(
       'Unrecognized Redis client',
     );
+  });
+
+  test('connection options and URLs are rejected with the BYO remedy', () => {
+    const optionsObject = {
+      host: '127.0.0.1',
+      port: 6399,
+      retryStrategy: () => null,
+    };
+
+    expect(() => resolveRedisApi(optionsObject as never)).toThrow(TypeError);
+    expect(() => resolveRedisApi(optionsObject as never)).toThrow(
+      /bring your own client/,
+    );
+    expect(() => resolveRedisApi('redis://localhost:6379' as never)).toThrow(
+      /bring your own client/,
+    );
+    expect(() => resolveRedisApi(undefined as never)).toThrow(
+      /bring your own client/,
+    );
+  });
+});
+
+describe('adapter no-TTL write semantics', () => {
+  test('iovalkey-like set and jsonSet both clear a previous expiry when no TTL is given', async () => {
+    const commands: string[][] = [];
+    const multiCalls: string[][] = [];
+    const makeMulti = () => {
+      const chain = {
+        call: (...args: (string | number)[]) => {
+          multiCalls.push(args.map(String));
+          return chain;
+        },
+        set: (..._a: string[]) => chain,
+        expire: (..._a: (string | number)[]) => chain,
+        exec: async () => [[null, 'OK']] as [Error | null, unknown][],
+      };
+      return chain;
+    };
+    const stub = {
+      call: async (...args: (string | number)[]) => {
+        commands.push(args.map(String));
+        return 'OK';
+      },
+      multi: makeMulti,
+      get: async () => null,
+      set: async (..._a: string[]) => 'OK',
+      del: async () => 0,
+      unlink: async () => 0,
+      scan: async () => ['0', []] as [string, string[]],
+      ping: async () => 'PONG',
+      info: async () => '',
+    };
+
+    const api = fromIoValkeyLike(stub as never);
+    await api.set('k', 'v');
+    await api.jsonSet('k', '"v"');
+
+    const flat = [...commands, ...multiCalls].map(c => c.join(' '));
+    expect(flat.some(c => c.startsWith('PERSIST k'))).toBe(true);
+  });
+
+  test('upstash-like jsonSet clears a previous expiry when no TTL is given', async () => {
+    const persisted: string[] = [];
+    const fake = createUpstashFake();
+    const withPersist = Object.assign(fake, {
+      persist: async (key: string) => {
+        persisted.push(key);
+        return 1;
+      },
+    });
+
+    const api = fromUpstashLike(withPersist as UpstashLike);
+    await api.jsonSet('k', JSON.stringify({a: 1}));
+
+    expect(persisted).toEqual(['k']);
+  });
+});
+
+describe('unlinkPatterns failure draining', () => {
+  test('no unhandled rejections when multiple batches fail', async () => {
+    const events: unknown[] = [];
+    const onUnhandled = (reason: unknown) => events.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+
+    try {
+      let calls = 0;
+      const fake = createFakeRedisApi({
+        scan: async () => ({cursor: '0', keys: ['p:1', 'p:2']}),
+        unlink: () => {
+          calls++;
+          const wait = calls === 1 ? 5 : 25;
+          return new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('unlink boom')), wait),
+          );
+        },
+      });
+
+      const [pattern] = unlinkPatterns({
+        redis: fake,
+        patterns: ['p:*'],
+        chunkSize: 1,
+        maxConcurrentBatches: 2,
+      });
+
+      expect(pattern).rejects.toThrow('unlink boom');
+      await pattern.catch(() => {});
+      await delay(50);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+
+    expect(events).toHaveLength(0);
   });
 });
 

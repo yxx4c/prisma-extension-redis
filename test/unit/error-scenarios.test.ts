@@ -9,7 +9,6 @@ import {
   flushModelCache,
   getCache,
   PrismaExtensionRedis,
-  type RedisOptions,
   unlinkPatterns,
 } from '../../src';
 import {createServerClock} from '../../src/redisApi';
@@ -18,8 +17,8 @@ import {createFakeRedisApi} from '../fakeRedisApi';
 import {PrismaClient} from '../prisma/generated/prisma/client';
 
 describe('Error Scenarios', () => {
-  const client = process.env.REDIS_SERVICE_URI as RedisOptions;
-  const redis = new Redis(client);
+  const redis = new Redis(process.env.REDIS_SERVICE_URI as string);
+  const client = redis;
   const adapter = new PrismaPg({
     connectionString: process.env.POSTGRES_SERVICE_URI,
   });
@@ -84,8 +83,8 @@ describe('Error Scenarios', () => {
           onMiss,
           // Use a transformer that throws on invalid data
           transformer: {
-            deserialize: (data: string) => {
-              const parsed = JSON.parse(data);
+            deserialize: (data: unknown) => {
+              const parsed = JSON.parse(data as string);
               if (typeof parsed !== 'object' || !parsed.isCached) {
                 throw new Error('Invalid cache context structure');
               }
@@ -193,7 +192,7 @@ describe('Error Scenarios', () => {
             serialize: () => {
               throw new Error('Serialization failed');
             },
-            deserialize: JSON.parse,
+            deserialize: data => JSON.parse(data as string),
           },
         },
         key,
@@ -382,8 +381,7 @@ describe('Health Check Error Scenarios', () => {
 });
 
 describe('Maintenance Batch Operations', () => {
-  const client = process.env.REDIS_SERVICE_URI as RedisOptions;
-  const redis = new Redis(client);
+  const redis = new Redis(process.env.REDIS_SERVICE_URI as string);
 
   afterAll(async () => {
     await redis.flushdb();
@@ -446,20 +444,20 @@ describe('Maintenance Batch Operations', () => {
     test('should batch delete when many keys exist', async () => {
       await redis.flushdb();
 
-      // Create many keys for a model (more than batchSize)
-      // Note: flushModelCache uses lowercase model name in pattern
+      // Create many keys for a model (more than batchSize), stored the
+      // way the key generator writes them (snake_cased model segment)
       const keysToCreate = 20;
       for (let i = 0; i < keysToCreate; i++) {
-        await redis.set(`prisma:testmodel:operation:${i}`, 'value');
+        await redis.set(`prisma:test_model:operation:${i}`, 'value');
       }
 
       // Verify keys were created
-      const createdKeys = await redis.keys('prisma:testmodel:*');
+      const createdKeys = await redis.keys('prisma:test_model:*');
       expect(createdKeys.length).toBe(keysToCreate);
 
       const result = await flushModelCache({
         redis,
-        model: 'TestModel', // Will be lowercased to 'testmodel'
+        model: 'TestModel',
         prefix: 'prisma',
         delimiter: ':',
         batchSize: 5, // Small batch to trigger batching
@@ -468,26 +466,26 @@ describe('Maintenance Batch Operations', () => {
       expect(result.deletedCount).toBe(keysToCreate);
 
       // Verify all keys are deleted
-      const remainingKeys = await redis.keys('prisma:testmodel:*');
+      const remainingKeys = await redis.keys('prisma:test_model:*');
       expect(remainingKeys.length).toBe(0);
     });
 
     test('should handle partial batch at end', async () => {
       await redis.flushdb();
 
-      // Create 7 keys with proper model pattern (will be 1 full batch of 5 + partial batch of 2)
-      // Note: flushModelCache uses lowercase model name in pattern
+      // Create 7 keys with the generator's model segment casing (1 full
+      // batch of 5 + partial batch of 2)
       for (let i = 0; i < 7; i++) {
-        await redis.set(`prisma:partialmodel:findUnique:${i}`, 'value');
+        await redis.set(`prisma:partial_model:findUnique:${i}`, 'value');
       }
 
       // Verify keys were created
-      const createdKeys = await redis.keys('prisma:partialmodel:*');
+      const createdKeys = await redis.keys('prisma:partial_model:*');
       expect(createdKeys.length).toBe(7);
 
       const result = await flushModelCache({
         redis,
-        model: 'PartialModel', // Will be lowercased to 'partialmodel'
+        model: 'PartialModel',
         prefix: 'prisma',
         delimiter: ':',
         batchSize: 5,
@@ -555,8 +553,7 @@ describe('Expired Beyond Stale Window', () => {
 });
 
 describe('Cache Read Error Scenarios', () => {
-  const client = process.env.REDIS_SERVICE_URI as RedisOptions;
-  const redis = new Redis(client);
+  const redis = new Redis(process.env.REDIS_SERVICE_URI as string);
 
   afterAll(async () => {
     await redis.quit();
@@ -678,7 +675,7 @@ describe('Write Error After Deserialization Failure', () => {
         metricsCollector,
         // Transformer that fails on serialize (after deserialization failure)
         transformer: {
-          deserialize: JSON.parse, // Will fail on corrupted data
+          deserialize: data => JSON.parse(data as string), // Will fail on corrupted data
           serialize: () => {
             throw new Error('Serialization failed');
           },
@@ -706,7 +703,7 @@ describe('filterOperations Edge Cases', () => {
     // Call with undefined to trigger the falsy branch
     const result = filter(undefined);
 
-    expect(result).toEqual(ops);
+    expect(result as unknown).toEqual(ops);
   });
 
   test('should filter operations when excluded is provided', () => {
@@ -715,7 +712,7 @@ describe('filterOperations Edge Cases', () => {
 
     const result = filter(['findFirst']);
 
-    expect(result).toEqual(['findUnique', 'findMany']);
+    expect(result as unknown).toEqual(['findUnique', 'findMany']);
   });
 });
 
