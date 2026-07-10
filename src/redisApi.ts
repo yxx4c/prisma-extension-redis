@@ -89,11 +89,24 @@ export interface UpstashLike {
   ping(): Promise<string>;
 }
 
+/**
+ * Loose structural stand-in for typed ioredis-family instances: their
+ * heavily overloaded method signatures don't match IoValkeyLike
+ * structurally, so acceptance keys on the discriminating verbs only.
+ * Detection and wrapping remain runtime duck-typing.
+ */
+export type IoValkeyCompatible = {
+  call(...args: never[]): unknown;
+  multi(...args: never[]): unknown;
+  scan(...args: never[]): unknown;
+};
+
 /** Everything accepted as the extension's `client` option. */
 export type RedisClientInput =
   | RedisOptions
   | string
   | IoValkeyLike
+  | IoValkeyCompatible
   | UpstashLike
   | RedisApi;
 

@@ -49,9 +49,14 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "import": "./dist/index.mjs"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -71,8 +76,10 @@
     "prisma:migrate": "bunx prisma migrate dev --config ./test/prisma/prisma.config.ts",
     "prisma:generate": "bunx prisma generate --config ./test/prisma/prisma.config.ts",
     "pretest": "bun run prisma:migrate && bun run prisma:generate",
-    "posttest": "bun run check",
-    "release": "semantic-release"
+    "posttest": "bun run check && bun run check:types",
+    "release": "semantic-release",
+    "check:types": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test:node": "node --test test/node/*.test.mjs"
   },
   "devDependencies": {
     "@amanda-mitchell/semantic-release-npm-multiple": "^3.17.0",
@@ -108,5 +115,6 @@
   },
   "dependencies": {
     "iovalkey": "^0.3.3"
-  }
+  },
+  "type": "commonjs"
 }

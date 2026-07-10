@@ -580,9 +580,9 @@ export type CacheParams = {
 
   /**
    * Cache config providing the storage type, serializer, and default
-   * ttl/stale values
+   * ttl/stale values (auto is irrelevant for direct writes)
    */
-  config: CacheConfig;
+  config: Omit<CacheConfig, 'auto'> & {auto?: CacheConfig['auto']};
 
   /**
    * Freshness window in seconds; defaults to config.ttl
@@ -672,7 +672,7 @@ export type ActionCheckParams = {
 export type GetDataParams = {
   ttl: number;
   stale: number;
-  config: CacheConfig;
+  config: Omit<CacheConfig, 'auto'> & {auto?: CacheConfig['auto']};
   key: string;
   redis: RedisClientInput;
   args: JsArgs;
