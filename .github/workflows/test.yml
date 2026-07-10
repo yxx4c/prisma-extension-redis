@@ -4,11 +4,18 @@ on: pull_request
 
 jobs:
   test:
-    name: test
+    name: test (${{ matrix.cfg.label }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - {label: dragonfly, image: "docker.dragonflydb.io/dragonflydb/dragonfly", prisma: ""}
+          - {label: redis-stack, image: "redis/redis-stack-server:latest", prisma: ""}
+          - {label: prisma-floor, image: "docker.dragonflydb.io/dragonflydb/dragonfly", prisma: "7.2.0"}
     services:
-      dragonfly:
-        image: "docker.dragonflydb.io/dragonflydb/dragonfly"
+      redis:
+        image: ${{ matrix.cfg.image }}
         ports:
           - 6379:6379
         options: >-
@@ -40,6 +47,10 @@ jobs:
       - name: Install Project Dependencies
         run: bun install --frozen-lockfile
 
+      - name: Pin Prisma to the peer floor
+        if: matrix.cfg.prisma != ''
+        run: bun add -d prisma@${{ matrix.cfg.prisma }} @prisma/client@${{ matrix.cfg.prisma }} @prisma/adapter-pg@${{ matrix.cfg.prisma }}
+
       - name: Run Test Suite
         env:
           REDIS_SERVICE_URI: redis://localhost:6379
@@ -47,6 +58,55 @@ jobs:
         run: bun run test
 
       - name: Upload coverage reports to Codecov
+        if: matrix.cfg.label == 'dragonfly'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set Up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Set Up Bun Package Manager
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Project Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Lint
+        run: bun run check
+
+      - name: Typecheck
+        run: bun run check:types
+
+      - name: Audit Dependencies
+        run: bun audit
+
+      - name: Lint Package Exports
+        run: bunx publint
+
+      - name: Check Type Resolution
+        run: bunx --yes @arethetypeswrong/cli --pack .
+
+      - name: Node Smoke Tests
+        run: bun run test:node
+
+      - name: Verify Packed Package
+        run: |
+          npm pack --pack-destination /tmp/pkg
+          mkdir /tmp/consumer && cd /tmp/consumer
+          npm init -y >/dev/null
+          npm install /tmp/pkg/*.tgz @prisma/client@^7.2.0 --no-audit --no-fund --loglevel=error
+          node -e "const m=require('prisma-extension-redis'); if (typeof m.PrismaExtensionRedis !== 'function') process.exit(1)"
+          node --input-type=module -e "import {PrismaExtensionRedis} from 'prisma-extension-redis'; if (typeof PrismaExtensionRedis !== 'function') process.exit(1)"

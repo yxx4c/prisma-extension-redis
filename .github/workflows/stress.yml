@@ -1,0 +1,36 @@
+name: stress
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+
+jobs:
+  load:
+    name: load harness
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: "docker.dragonflydb.io/dragonflydb/dragonfly"
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set Up Bun Package Manager
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Project Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Load Harness
+        env:
+          REDIS_SERVICE_URI: redis://localhost:6379
+        run: bun test/stress/load.ts 15 1500 100
