@@ -1,3 +1,10 @@
+# [4.2.0](https://github.com/yxx4c/prisma-extension-redis/compare/v4.1.0...v4.2.0) (2026-07-10)
+
+
+### Features
+
+* add includedModels whitelist for auto-caching ([8551bd7](https://github.com/yxx4c/prisma-extension-redis/commit/8551bd7e2662d581dffbb56e8e218ac3d8701a63)), closes [#45](https://github.com/yxx4c/prisma-extension-redis/issues/45)
+
 # [4.1.0](https://github.com/yxx4c/prisma-extension-redis/compare/v4.0.1...v4.1.0) (2026-07-09)
 
 
