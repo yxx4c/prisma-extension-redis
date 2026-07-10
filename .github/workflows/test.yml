@@ -109,6 +109,7 @@ jobs:
 
       - name: Verify Packed Package
         run: |
+          mkdir -p /tmp/pkg
           npm pack --pack-destination /tmp/pkg
           mkdir /tmp/consumer && cd /tmp/consumer
           npm init -y >/dev/null
