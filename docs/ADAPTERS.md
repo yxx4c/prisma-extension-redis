@@ -46,6 +46,7 @@ Notes:
 - **`info` is optional.** When absent (e.g. Upstash REST), `healthCheck()` still works; `serverInfo` is simply `undefined`.
 - **Writes without a TTL persist the key**: when `set`/`jsonSet` receive no `ttlSeconds`, any previous expiry on the key is removed (the built-in adapters issue `PERSIST` for the JSON path; Upstash clients use `persist` when available).
 - **Upstash TTLs are applied non-atomically** for the JSON type (`json.set` then `expire` over REST); a failure between the two can leave a value without its expiry.
+- **Redis Cluster is not currently supported** for the SCAN-based utilities (pattern invalidation, maintenance) or multi-key `UNLINK`/`DEL`: scans run against a single connection (one node of a cluster) and multi-key commands can fail with `CROSSSLOT`. Use standalone, replicated, or Dragonfly deployments, or scope an adapter per shard.
 - **Connection lifecycle is yours** when you pass an instance or adapter. The extension never calls `quit`/`disconnect`, and when you pass connection options instead, the constructed iovalkey client connects at initialization and lives for the process. The client you supplied is exposed as `prisma.redis` for direct access.
 
 ## Example: @upstash/redis
