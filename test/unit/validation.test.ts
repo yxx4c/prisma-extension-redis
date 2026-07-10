@@ -308,13 +308,13 @@ describe('validateCacheOptions', () => {
       validateCacheOptions({
         key: 'user:1',
         stale: 30,
-      } as {key: string; stale: number}),
+      } as never),
     ).toThrow(ValidationError);
     expect(() =>
       validateCacheOptions({
         key: 'user:1',
         stale: 30,
-      } as {key: string; stale: number}),
+      } as never),
     ).toThrow('stale cannot be set without ttl');
   });
 

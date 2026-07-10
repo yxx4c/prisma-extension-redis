@@ -153,7 +153,7 @@ describe('Custom RedisApi adapter (client-agnostic end-to-end)', () => {
     });
 
     expect(read.meta.source).toBe('cache');
-    expect(read.result).toEqual(planted);
+    expect(read.result as unknown).toEqual(planted);
   });
 
   test('maintenance utilities run against the custom client', async () => {
@@ -218,10 +218,10 @@ describe('Custom RedisApi adapter (client-agnostic end-to-end)', () => {
     expect(Array.isArray(rows)).toBe(true);
     expect(fakeRedis.store.has(key)).toBe(false);
 
-    const aggregated = await prisma.user.aggregate({
+    const aggregated = (await prisma.user.aggregate({
       _count: true,
       uncache: {uncacheKeys: ['ignored']},
-    } as never);
+    } as never)) as {_count: number};
     expect(aggregated._count).toBeGreaterThanOrEqual(0);
   });
 

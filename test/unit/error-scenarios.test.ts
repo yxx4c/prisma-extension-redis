@@ -84,8 +84,8 @@ describe('Error Scenarios', () => {
           onMiss,
           // Use a transformer that throws on invalid data
           transformer: {
-            deserialize: (data: string) => {
-              const parsed = JSON.parse(data);
+            deserialize: (data: unknown) => {
+              const parsed = JSON.parse(data as string);
               if (typeof parsed !== 'object' || !parsed.isCached) {
                 throw new Error('Invalid cache context structure');
               }
@@ -193,7 +193,7 @@ describe('Error Scenarios', () => {
             serialize: () => {
               throw new Error('Serialization failed');
             },
-            deserialize: JSON.parse,
+            deserialize: data => JSON.parse(data as string),
           },
         },
         key,
@@ -678,7 +678,7 @@ describe('Write Error After Deserialization Failure', () => {
         metricsCollector,
         // Transformer that fails on serialize (after deserialization failure)
         transformer: {
-          deserialize: JSON.parse, // Will fail on corrupted data
+          deserialize: data => JSON.parse(data as string), // Will fail on corrupted data
           serialize: () => {
             throw new Error('Serialization failed');
           },
@@ -706,7 +706,7 @@ describe('filterOperations Edge Cases', () => {
     // Call with undefined to trigger the falsy branch
     const result = filter(undefined);
 
-    expect(result).toEqual(ops);
+    expect(result as unknown).toEqual(ops);
   });
 
   test('should filter operations when excluded is provided', () => {
@@ -715,7 +715,7 @@ describe('filterOperations Edge Cases', () => {
 
     const result = filter(['findFirst']);
 
-    expect(result).toEqual(['findUnique', 'findMany']);
+    expect(result as unknown).toEqual(['findUnique', 'findMany']);
   });
 });
 
