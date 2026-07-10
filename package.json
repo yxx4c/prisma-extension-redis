@@ -6,7 +6,7 @@
     "type": "git",
     "url": "git+https://github.com/yxx4c/prisma-extension-redis.git"
   },
-  "homepage": "https://github.com/yxx4c/prisma-extension-redis",
+  "homepage": "https://yxx4c.github.io/prisma-extension-redis/",
   "bugs": "https://github.com/yxx4c/prisma-extension-redis/issues",
   "author": {
     "name": "caxxy",
@@ -49,9 +49,14 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "import": "./dist/index.mjs"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -71,23 +76,33 @@
     "prisma:migrate": "bunx prisma migrate dev --config ./test/prisma/prisma.config.ts",
     "prisma:generate": "bunx prisma generate --config ./test/prisma/prisma.config.ts",
     "pretest": "bun run prisma:migrate && bun run prisma:generate",
-    "posttest": "bun run check",
-    "release": "semantic-release"
+    "posttest": "bun run check && bun run check:types",
+    "release": "semantic-release",
+    "check:types": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test:node": "node --test test/node/*.mjs",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
     "@amanda-mitchell/semantic-release-npm-multiple": "^3.17.0",
+    "@biomejs/biome": "^2.5.3",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
-    "@biomejs/biome": "^2.5.3",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/bun": "^1.3.14",
     "@types/node": "^25.9.5",
+    "@upstash/redis": "^1.38.0",
     "dotenv": "^17.4.2",
+    "fast-check": "^4.9.0",
+    "ioredis": "^5.11.1",
+    "iovalkey": "^0.3.3",
     "prisma": "^7.8.0",
     "semantic-release": "^25.0.5",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitepress": "^2.0.0-alpha.18"
   },
   "publishConfig": {
     "access": "public"
@@ -106,7 +121,5 @@
   "peerDependencies": {
     "@prisma/client": "^7.2.0"
   },
-  "dependencies": {
-    "iovalkey": "^0.3.3"
-  }
+  "type": "commonjs"
 }

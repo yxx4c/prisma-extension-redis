@@ -1,4 +1,5 @@
 import {afterEach, beforeEach, describe, expect, test} from 'bun:test';
+import {cleanupOrphanedKeys, flushModelCache, getKeyGen} from '../../src';
 import {extendedPrismaWithJsonAndAutoCacheTrue} from '../client';
 
 describe('Cache Maintenance Utilities', () => {
@@ -178,6 +179,103 @@ describe('Cache Maintenance Utilities', () => {
 
       // Should not identify as orphaned since User matches user
       expect(result.orphanedKeys.length).toBe(0);
+    });
+  });
+
+  describe('casing consistency with the key generator', () => {
+    test('flushModelCache deletes keys of multi-word models', async () => {
+      const key = extendedPrismaWithJsonAndAutoCacheTrue.getAutoKey({
+        model: 'GroupOnUsers',
+        operation: 'findMany',
+        args: {where: {userId: 1}},
+      });
+      await redis.set(key, 'live');
+
+      const result =
+        await extendedPrismaWithJsonAndAutoCacheTrue.flushModelCache(
+          'GroupOnUsers',
+        );
+
+      expect(result.deletedCount).toBe(1);
+      expect(await redis.get(key)).toBeNull();
+    });
+
+    test('cleanupOrphanedKeys keeps live keys of multi-word models', async () => {
+      const key = extendedPrismaWithJsonAndAutoCacheTrue.getAutoKey({
+        model: 'GroupOnUsers',
+        operation: 'findMany',
+        args: {where: {userId: 1}},
+      });
+      await redis.set(key, 'live');
+
+      const result =
+        await extendedPrismaWithJsonAndAutoCacheTrue.cleanupOrphanedKeys(
+          ['GroupOnUsers'],
+          {dryRun: false},
+        );
+
+      expect(result.orphanedKeys).toEqual([]);
+      expect(await redis.get(key)).toBe('live');
+    });
+
+    test('standalone flushModelCache honors a custom prefix the way keys are written', async () => {
+      const getKey = getKeyGen(undefined, undefined, 'MyApp');
+      const key = getKey({
+        params: [{id: '7'}],
+        model: 'User',
+        operation: 'findUnique',
+      });
+      await redis.set(key, 'live');
+
+      const result = await flushModelCache({
+        redis,
+        model: 'User',
+        prefix: 'MyApp',
+      });
+
+      expect(result.deletedCount).toBe(1);
+      expect(await redis.get(key)).toBeNull();
+    });
+
+    test('standalone cleanupOrphanedKeys scans a custom prefix the way keys are written', async () => {
+      const getKey = getKeyGen(undefined, undefined, 'MyApp');
+      const key = getKey({
+        params: [{id: '7'}],
+        model: 'User',
+        operation: 'findUnique',
+      });
+      await redis.set(key, 'live');
+
+      const result = await cleanupOrphanedKeys({
+        redis,
+        validModels: ['User'],
+        prefix: 'MyApp',
+        dryRun: true,
+      });
+
+      expect(result.scannedKeys).toBe(1);
+      expect(result.orphanedKeys).toEqual([]);
+    });
+
+    test('a custom caseTransformer is honored end to end', async () => {
+      const upper = (s: string) => s.toUpperCase();
+      const getKey = getKeyGen(undefined, upper, 'prisma');
+      const key = getKey({
+        params: [{id: '7'}],
+        model: 'GroupOnUsers',
+        operation: 'findUnique',
+      });
+      await redis.set(key, 'live');
+
+      const result = await flushModelCache({
+        redis,
+        model: 'GroupOnUsers',
+        prefix: 'prisma',
+        caseTransformer: upper,
+      });
+
+      expect(result.deletedCount).toBe(1);
+      expect(await redis.get(key)).toBeNull();
     });
   });
 });

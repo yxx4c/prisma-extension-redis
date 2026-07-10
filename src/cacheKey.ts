@@ -136,7 +136,7 @@ export const getKeyPatternGen =
       )
       .join(delimiter);
 
-const snakeCase = (str: string): string =>
+export const snakeCase = (str: string): string =>
   str
     .replace(/([a-z])([A-Z])/g, '$1_$2')
     .replace(/[\s-]+/g, '_')

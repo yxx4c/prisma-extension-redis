@@ -1,5 +1,3 @@
-export type {Redis} from 'iovalkey';
-
 import type {Prisma} from '@prisma/client/extension';
 import type {
   JsArgs,
@@ -33,6 +31,7 @@ export const ALL_OPERATIONS = [
   'groupBy',
   'update',
   'updateMany',
+  'updateManyAndReturn',
   'upsert',
 ] as const satisfies ReadonlyArray<Operation>;
 
@@ -98,6 +97,7 @@ export const UNCACHE_OPTIONAL_ARG_OPERATIONS = [
   'createManyAndReturn',
   'deleteMany',
   'updateMany',
+  'updateManyAndReturn',
 ] as const satisfies ReadonlyArray<Operation>;
 
 export const UNCACHE_OPERATIONS = [
@@ -475,6 +475,12 @@ export interface ModelConfig {
   excludedOperations?: autoOperations[];
 
   /**
+   * Model-specific override of auto.invalidateOnWrite: writes to this
+   * model purge (true) or keep (false) its auto-cached entries
+   */
+  invalidateOnWrite?: boolean;
+
+  /**
    * Model-specific extra stale window in seconds after ttl expires
    */
   stale?: number;
@@ -505,6 +511,16 @@ export type AutoCacheConfig =
       excludedOperations?: autoOperations[];
 
       /**
+       * Purge a model's auto-cached entries whenever a write operation
+       * (create/update/delete/upsert and their Many variants) on that
+       * model succeeds. Only auto-cache keys are removed — custom keys
+       * are untouched, and cached results of other models that embed
+       * this model via include/select are not detected. Overridable per
+       * model via models[].invalidateOnWrite
+       */
+      invalidateOnWrite?: boolean;
+
+      /**
        * Default model configuration
        */
       models?: ModelConfig[];
@@ -522,20 +538,23 @@ export type AutoCacheConfig =
     }
   | boolean;
 
-export interface PrismaExtensionRedisOptions {
+export interface PrismaExtensionRedisOptions<
+  C extends RedisClientInput = RedisClientInput,
+> {
   /**
    * Cache config
    */
   config: CacheConfig;
 
   /**
-   * Redis connection. Accepts iovalkey RedisOptions or a connection
-   * string (a client is constructed for you), an existing
-   * ioredis-compatible instance (iovalkey, ioredis, valkey), an
-   * Upstash-style REST client (@upstash/redis), or any custom RedisApi
-   * implementation.
+   * Your Redis client instance: an ioredis-compatible instance
+   * (iovalkey, ioredis, valkey), an Upstash-style REST client
+   * (@upstash/redis), or any custom RedisApi implementation. The
+   * extension never constructs clients or opens connections itself —
+   * you own the client and its lifecycle, and it is exposed back,
+   * exactly as typed, on the extended client as `prisma.redis`.
    */
-  client: RedisClientInput;
+  client: C;
 }
 
 export type DeletePatterns = {
@@ -578,9 +597,9 @@ export type CacheParams = {
 
   /**
    * Cache config providing the storage type, serializer, and default
-   * ttl/stale values
+   * ttl/stale values (auto is irrelevant for direct writes)
    */
-  config: CacheConfig;
+  config: Omit<CacheConfig, 'auto'> & {auto?: CacheConfig['auto']};
 
   /**
    * Freshness window in seconds; defaults to config.ttl
@@ -670,7 +689,7 @@ export type ActionCheckParams = {
 export type GetDataParams = {
   ttl: number;
   stale: number;
-  config: CacheConfig;
+  config: Omit<CacheConfig, 'auto'> & {auto?: CacheConfig['auto']};
   key: string;
   redis: RedisClientInput;
   args: JsArgs;

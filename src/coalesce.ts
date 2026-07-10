@@ -20,14 +20,18 @@ const inflight = new Map<string, Promise<unknown>>();
  * const result = await coalesce(cacheKey, () => queryDatabase(args));
  * ```
  */
-export const coalesce = <T>(key: string, fn: () => Promise<T>): Promise<T> => {
-  const existing = inflight.get(key);
+export const coalesce = <T>(
+  key: string,
+  fn: () => Promise<T>,
+  scope: Map<string, Promise<unknown>> = inflight,
+): Promise<T> => {
+  const existing = scope.get(key);
   if (existing) return existing as Promise<T>;
 
   const promise = (async () => fn())().finally(() => {
-    inflight.delete(key);
+    scope.delete(key);
   });
 
-  inflight.set(key, promise);
+  scope.set(key, promise);
   return promise;
 };

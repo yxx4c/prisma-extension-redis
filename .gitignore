@@ -4,3 +4,5 @@ dist
 node_modules
 build-github
 test/prisma/generated
+docs/.vitepress/dist
+docs/.vitepress/cache

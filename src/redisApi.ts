@@ -1,5 +1,3 @@
-import Redis, {type RedisOptions} from 'iovalkey';
-
 /**
  * The minimal, client-agnostic Redis surface this extension needs.
  *
@@ -78,6 +76,7 @@ export interface UpstashLike {
     set(key: string, path: string, value: unknown): Promise<unknown>;
   };
   expire(key: string, seconds: number): Promise<unknown>;
+  persist?(key: string): Promise<unknown>;
   del(...keys: string[]): Promise<number>;
   unlink?(...keys: string[]): Promise<number>;
   scan(
@@ -88,16 +87,56 @@ export interface UpstashLike {
   ping(): Promise<string>;
 }
 
-/** Everything accepted as the extension's `client` option. */
+/**
+ * Loose structural stand-in for typed ioredis-family instances: their
+ * heavily overloaded method signatures don't match IoValkeyLike
+ * structurally, so acceptance keys on the discriminating verbs only.
+ * Detection and wrapping remain runtime duck-typing.
+ */
+export type IoValkeyCompatible = {
+  call(...args: never[]): unknown;
+  multi(...args: never[]): unknown;
+  scan(...args: never[]): unknown;
+};
+
+/**
+ * Everything accepted as the extension's `client` option: a client
+ * instance you construct and own. Connection options and URLs are not
+ * accepted — the extension never opens connections on your behalf.
+ */
 export type RedisClientInput =
-  | RedisOptions
-  | string
   | IoValkeyLike
+  | IoValkeyCompatible
   | UpstashLike
   | RedisApi;
 
 const isFunction = (value: unknown): value is (...a: never[]) => unknown =>
   typeof value === 'function';
+
+/**
+ * Verifies the server accepts RedisJSON commands by writing and removing
+ * a short-lived probe key through the same jsonSet path cached queries
+ * use. The probe key expires on its own if the unlink is not reached.
+ */
+export const probeJsonSupport = async (
+  api: RedisApi,
+): Promise<{supported: boolean; error?: Error}> => {
+  const probeKey = '__prisma_extension_redis__:json_probe';
+  try {
+    await api.jsonSet(probeKey, '{"probe":1}', 60);
+    try {
+      await api.unlink([probeKey]);
+    } catch {
+      // The probe key expires via its TTL
+    }
+    return {supported: true};
+  } catch (error) {
+    return {
+      supported: false,
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+};
 
 const hasTtl = (ttl?: number): ttl is number =>
   ttl !== undefined && ttl !== Number.POSITIVE_INFINITY && ttl > 0;
@@ -136,7 +175,10 @@ export const fromIoValkeyLike = (client: IoValkeyLike): RedisApi => ({
   jsonGet: key => client.call('JSON.GET', key) as Promise<string | null>,
   jsonSet: (key, value, ttl) => {
     const multi = client.multi().call('JSON.SET', key, '$', value);
+    // SET without TTL clears a previous expiry; JSON.SET preserves it,
+    // so PERSIST keeps both write paths on the same contract
     if (hasTtl(ttl)) multi.call('EXPIRE', key, ttl);
+    else multi.call('PERSIST', key);
     return execOrThrow(multi);
   },
   del: keys => (keys.length ? client.del(...keys) : Promise.resolve(0)),
@@ -180,6 +222,7 @@ export const fromUpstashLike = (client: UpstashLike): RedisApi => ({
   jsonSet: async (key, value, ttl) => {
     await client.json.set(key, '$', JSON.parse(value));
     if (hasTtl(ttl)) await client.expire(key, ttl);
+    else if (client.persist) await client.persist(key);
   },
   del: keys => (keys.length ? client.del(...keys) : Promise.resolve(0)),
   unlink: keys =>
@@ -243,11 +286,11 @@ const apiCache = new WeakMap<object, RedisApi>();
  * Resolves anything accepted as the `client` option to a RedisApi:
  * - a RedisApi implementation is used as-is
  * - ioredis-compatible instances and Upstash-style clients are wrapped
- * - a connection string or RedisOptions object constructs an iovalkey
- *   client (the historical behavior)
  *
  * Wrappers are memoized per client instance, so utilities can resolve on
- * every call without allocating.
+ * every call without allocating. Connection options and URLs are
+ * rejected with the remedy — the extension has no Redis dependency of
+ * its own and never opens connections on the caller's behalf.
  */
 export const resolveRedisApi = (
   client: RedisClientInput,
@@ -271,20 +314,34 @@ export const resolveRedisApi = (
       return {api, raw: client};
     }
 
-    // An object exposing functions is a (mis-shaped) client, not
-    // connection options - fail loudly instead of trying to connect
-    if (Object.values(client).some(isFunction)) {
+    // An object exposing client verbs is a (mis-shaped) client, not
+    // connection options - fail loudly with the client remedy. Plain
+    // options legitimately carry function fields (retryStrategy,
+    // reconnectOnError), so only Redis-verb functions count
+    const verbs = [
+      'get',
+      'set',
+      'del',
+      'unlink',
+      'scan',
+      'ping',
+      'call',
+      'multi',
+      'jsonGet',
+      'jsonSet',
+    ] as const;
+    const record = client as Record<string, unknown>;
+    if (verbs.some(verb => isFunction(record[verb]))) {
       throw new TypeError(
-        'Unrecognized Redis client: implement the RedisApi interface, or pass an ioredis-compatible instance, an Upstash-style client, or iovalkey connection options.',
+        'Unrecognized Redis client: implement the RedisApi interface, or pass an ioredis-compatible instance or an Upstash-style client (see docs/ADAPTERS.md).',
       );
     }
   }
 
-  // Connection string or RedisOptions: construct an iovalkey client
-  const instance = new Redis(client as RedisOptions);
-  const api = fromIoValkeyLike(instance as unknown as IoValkeyLike);
-  apiCache.set(instance, api);
-  return {api, raw: instance};
+  throw new TypeError(
+    'prisma-extension-redis does not construct Redis clients from connection options or URLs — bring your own client instance. ' +
+      'For example: `npm i iovalkey` (or ioredis) and pass `client: new Redis(...)`; or pass an `@upstash/redis` client; or any implementation of the RedisApi interface. See docs/ADAPTERS.md.',
+  );
 };
 
 /**

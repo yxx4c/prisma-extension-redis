@@ -122,13 +122,32 @@ describe('cache', () => {
     ).rejects.toThrow(ValidationError);
   });
 
+  test('rejects a zero total lifetime', async () => {
+    const fake = createFakeRedisApi();
+
+    expect(
+      cache({
+        redis: fake,
+        config: jsonConfig,
+        key: 'direct:zero',
+        value: 1,
+        ttl: 0,
+        stale: 0,
+      }),
+    ).rejects.toThrow(ValidationError);
+  });
+
   test('rejects an invalid cache type', async () => {
     const fake = createFakeRedisApi();
-    // @ts-expect-error: Intentionally using invalid type for testing
     const config = {ttl: 60, stale: 30, type: 'INVALID'} as const;
 
     expect(
-      cache({redis: fake, config, key: 'direct:invalid', value: 1}),
+      cache({
+        redis: fake,
+        config: config as never,
+        key: 'direct:invalid',
+        value: 1,
+      }),
     ).rejects.toThrow('Incorrect CacheType provided');
   });
 });

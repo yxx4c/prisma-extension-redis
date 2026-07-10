@@ -1,13 +1,17 @@
 import {PrismaPg} from '@prisma/adapter-pg';
+import Redis from 'iovalkey';
 import {
   type AutoCacheConfig,
   type CacheConfig,
   PrismaExtensionRedis,
-  type RedisOptions,
 } from '../src';
 import {PrismaClient} from './prisma/generated/prisma/client';
 
-const client = process.env.REDIS_SERVICE_URI as RedisOptions;
+// One caller-owned client shared by every extended client below — the
+// v5 contract: the extension never constructs connections itself
+export const redisClient = new Redis(process.env.REDIS_SERVICE_URI as string);
+
+const client = redisClient;
 
 const auto: AutoCacheConfig = {
   excludedModels: ['Post'],

@@ -1,5 +1,4 @@
-export type {Redis, RedisOptions} from 'iovalkey';
-export {getKeyGen, getKeyPatternGen} from './cacheKey';
+export {getKeyGen, getKeyPatternGen, snakeCase} from './cacheKey';
 export {
   cache,
   filterOperations,
@@ -61,12 +60,16 @@ export {
   createServerClock,
   fromIoValkeyLike,
   fromUpstashLike,
+  probeJsonSupport,
   resolveRedisApi,
 } from './redisApi';
 export type {
   AutoCacheConfig,
+  CacheAutoKeyParams,
   CacheConfig,
   CacheErrors,
+  CacheKeyParams,
+  CacheKeyPatternParams,
   CacheOptions,
   CacheParams,
   CacheSource,
