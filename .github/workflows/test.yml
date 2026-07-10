@@ -81,6 +81,11 @@ jobs:
       - name: Install Project Dependencies
         run: bun install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        env:
+          POSTGRES_SERVICE_URI: postgres://user:password@localhost:5432/testdb
+        run: bunx prisma generate --config ./test/prisma/prisma.config.ts
+
       - name: Build
         run: bun run build
 

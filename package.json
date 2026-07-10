@@ -79,7 +79,7 @@
     "posttest": "bun run check && bun run check:types",
     "release": "semantic-release",
     "check:types": "tsc --noEmit -p tsconfig.typecheck.json",
-    "test:node": "node --test test/node/*.test.mjs"
+    "test:node": "node --test test/node/*.mjs"
   },
   "devDependencies": {
     "@amanda-mitchell/semantic-release-npm-multiple": "^3.17.0",
