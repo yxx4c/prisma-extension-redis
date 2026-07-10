@@ -477,6 +477,12 @@ export interface ModelConfig {
   excludedOperations?: autoOperations[];
 
   /**
+   * Model-specific override of auto.invalidateOnWrite: writes to this
+   * model purge (true) or keep (false) its auto-cached entries
+   */
+  invalidateOnWrite?: boolean;
+
+  /**
    * Model-specific extra stale window in seconds after ttl expires
    */
   stale?: number;
@@ -505,6 +511,16 @@ export type AutoCacheConfig =
        * Default excluded cache operations
        */
       excludedOperations?: autoOperations[];
+
+      /**
+       * Purge a model's auto-cached entries whenever a write operation
+       * (create/update/delete/upsert and their Many variants) on that
+       * model succeeds. Only auto-cache keys are removed — custom keys
+       * are untouched, and cached results of other models that embed
+       * this model via include/select are not detected. Overridable per
+       * model via models[].invalidateOnWrite
+       */
+      invalidateOnWrite?: boolean;
 
       /**
        * Default model configuration

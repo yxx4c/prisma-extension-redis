@@ -601,6 +601,40 @@ export const customUncacheAction = async ({
   return await query({...args, uncache: undefined, meta: undefined});
 };
 
+/**
+ * Runs a write operation and, once it succeeds, purges the model's
+ * auto-cache entries by pattern. Explicit uncache keys passed on the
+ * query are removed in the same pass. Runs after the write (a failed
+ * write must not purge), and like customUncacheAction it resolves with
+ * the plain Prisma result.
+ */
+export const autoInvalidateAction = async (
+  {redis, options: {args, query}, config}: ActionParams,
+  modelPattern: string,
+) => {
+  const result = await query({
+    ...args,
+    cache: undefined,
+    uncache: undefined,
+    meta: undefined,
+  });
+
+  const explicit =
+    args.uncache && typeof args.uncache === 'object'
+      ? (args.uncache as unknown as UncacheOptions).uncacheKeys
+      : [];
+
+  await uncache({
+    redis,
+    uncacheKeys: [modelPattern, ...explicit],
+    hasPattern: true,
+    chunkSize: config.chunkSize,
+    maxConcurrentBatches: config.maxConcurrentBatches,
+  });
+
+  return result;
+};
+
 export const isAutoCacheEnabled = ({
   auto,
   options: {args: xArgs, model, operation},
@@ -640,3 +674,26 @@ export const isCustomUncacheEnabled = ({
   !!xArgs.uncache &&
   typeof xArgs.uncache === 'object' &&
   UNCACHE_OPERATIONS.includes(operation as (typeof UNCACHE_OPERATIONS)[number]);
+
+export const isAutoInvalidateEnabled = ({
+  auto,
+  options: {model, operation},
+}: ActionCheckParams) => {
+  if (typeof auto !== 'object' || auto === null) return false;
+  if (
+    !UNCACHE_OPERATIONS.includes(
+      operation as (typeof UNCACHE_OPERATIONS)[number],
+    )
+  )
+    return false;
+
+  const modelOverride = auto.models?.find(
+    m => m.model === model,
+  )?.invalidateOnWrite;
+  if (!(modelOverride ?? auto.invalidateOnWrite)) return false;
+
+  if (auto.includedModels && !auto.includedModels.includes(model)) return false;
+  if (auto.excludedModels?.includes(model)) return false;
+
+  return true;
+};

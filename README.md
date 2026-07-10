@@ -293,6 +293,22 @@ extendedPrisma.user.update({
 - **`uncacheKeys`**: Specifies the keys or patterns to be invalidated.
 - **`hasPattern`**: Indicates if wildcard patterns are used for key matching.
 
+### Automatic Write Invalidation
+
+Instead of listing keys on every mutation, let writes purge their model's auto-cache:
+
+```javascript
+config: {
+  auto: {
+    invalidateOnWrite: true, // create/update/delete/upsert purge the model's auto-cached entries
+    ttl: 60,
+    stale: 30,
+  },
+}
+```
+
+After a successful write, the written model's auto-cached reads are invalidated immediately (custom keys are untouched, and both mechanisms compose — explicit `uncache` keys on the same write are removed in the same pass). Per-model overrides and the full semantics — relation caveats, transaction timing — are in the [configuration guide](docs/CONFIGURATION.md#write-invalidation-invalidateonwrite).
+
 ### Direct Cache Invalidation
 
 Cache entries can also be deleted directly with the `uncache` client method, without performing a database operation:

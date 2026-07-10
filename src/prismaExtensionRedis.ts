@@ -1,12 +1,19 @@
 import {Prisma} from '@prisma/client/extension';
 import type Redis from 'iovalkey';
-import {getAutoKeyGen, getKeyGen, getKeyPatternGen} from './cacheKey';
+import {
+  getAutoKeyGen,
+  getKeyGen,
+  getKeyPatternGen,
+  snakeCase,
+} from './cacheKey';
 import {
   autoCacheAction,
+  autoInvalidateAction,
   cache,
   customCacheAction,
   customUncacheAction,
   isAutoCacheEnabled,
+  isAutoInvalidateEnabled,
   isCustomCacheEnabled,
   isCustomUncacheEnabled,
   uncache,
@@ -110,6 +117,15 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
   // Bind maintenance utilities with configured prefix/delimiter
   const configuredPrefix = prefix ?? DEFAULT_PREFIX;
   const configuredDelimiter = delimiter ?? DEFAULT_DELIMITER;
+
+  // Auto keys are `prefix:model:op:operation:key:hash` after the case
+  // transformer; the op segment scopes the pattern to auto-cache entries
+  // so custom keys under the same model survive write invalidation
+  const transform = caseTransformer ?? snakeCase;
+  const autoKeyPatternFor = (model: string) =>
+    [transform(configuredPrefix), transform(model), transform('op'), '*'].join(
+      configuredDelimiter,
+    );
 
   return Prisma.defineExtension({
     name: 'prisma-extension-redis',
@@ -298,6 +314,12 @@ export const PrismaExtensionRedis = (options: PrismaExtensionRedisOptions) => {
               options,
               config,
             });
+
+          if (isAutoInvalidateEnabled({auto, options}))
+            return autoInvalidateAction(
+              {redis: api, options, config},
+              autoKeyPatternFor(options.model),
+            );
 
           if (isCustomUncacheEnabled({options}))
             return customUncacheAction({
