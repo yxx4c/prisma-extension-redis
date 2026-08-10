@@ -1,4 +1,4 @@
-import {expect, test} from 'bun:test';
+import {beforeAll, expect, test} from 'bun:test';
 import {extendedPrismaWithExtendedStale} from '../client';
 
 import {users} from '../data';
@@ -6,8 +6,13 @@ import {
   autoFindUserByWhereUniqueInput,
   createUser,
   delay,
+  deleteAllUsers,
   deleteAllUsersAndGetCountOfUsersWithoutCaching,
 } from '../functions';
+
+beforeAll(async () => {
+  await deleteAllUsers(extendedPrismaWithExtendedStale);
+});
 
 test('User Creation: should create a new user', async () => {
   const userOne = users.find(user => user.id === 1);
