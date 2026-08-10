@@ -98,7 +98,13 @@ jobs:
       - name: Typecheck
         run: bun run check:types
 
+      # The published package ships zero runtime dependencies, so dev-tree
+      # advisories cannot reach consumers. Only critical ones gate a release.
       - name: Audit Dependencies
+        run: bun audit --audit-level=critical
+
+      - name: Audit Report
+        continue-on-error: true
         run: bun audit
 
       - name: Lint Package Exports
