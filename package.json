@@ -97,7 +97,7 @@
     "dotenv": "^17.4.2",
     "fast-check": "^4.9.0",
     "ioredis": "^5.11.1",
-    "iovalkey": "^0.3.3",
+    "iovalkey": "^0.4.0",
     "prisma": "^7.8.0",
     "semantic-release": "^25.0.5",
     "tsup": "^8.5.1",
