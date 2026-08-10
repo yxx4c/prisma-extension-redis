@@ -45,7 +45,14 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install Project Dependencies
+        if: github.actor != 'dependabot[bot]'
         run: bun install --frozen-lockfile
+
+      # Dependabot cannot update bun.lock, so a frozen install would fail
+      # before a single test runs.
+      - name: Install Project Dependencies (Dependabot)
+        if: github.actor == 'dependabot[bot]'
+        run: bun install
 
       - name: Pin Prisma to the peer floor
         if: matrix.cfg.prisma != ''
@@ -79,7 +86,14 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install Project Dependencies
+        if: github.actor != 'dependabot[bot]'
         run: bun install --frozen-lockfile
+
+      # Dependabot cannot update bun.lock, so a frozen install would fail
+      # before a single check runs.
+      - name: Install Project Dependencies (Dependabot)
+        if: github.actor == 'dependabot[bot]'
+        run: bun install
 
       - name: Generate Prisma Client
         env:
@@ -95,7 +109,13 @@ jobs:
       - name: Typecheck
         run: bun run check:types
 
+      # The published package ships zero runtime dependencies, so dev-tree
+      # advisories cannot reach consumers. Only critical ones gate the build.
       - name: Audit Dependencies
+        run: bun audit --audit-level=critical
+
+      - name: Audit Report
+        continue-on-error: true
         run: bun audit
 
       - name: Lint Package Exports
