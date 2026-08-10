@@ -7,7 +7,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: lockfile-sync-${{ github.ref }}
@@ -16,6 +16,8 @@ concurrency:
 jobs:
   sync:
     name: sync bun.lock
+    permissions:
+      contents: write
     # Dependabot cannot update bun.lock. Refreshing it on the PR branch keeps
     # the merge commit self-consistent, so main never carries a stale lockfile
     # that would break the frozen installs in publish and pages.
@@ -30,8 +32,11 @@ jobs:
       - name: Set Up Bun Package Manager
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
+      # This job holds a write-capable token, so it must not execute package
+      # lifecycle scripts from the branch it is resolving. Skipping them
+      # produces a byte-identical lockfile.
       - name: Resolve Dependencies
-        run: bun install
+        run: bun install --ignore-scripts
 
       - name: Commit Lockfile Drift
         run: |
