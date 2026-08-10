@@ -1,4 +1,4 @@
-import {beforeAll, describe, expect, test} from 'bun:test';
+import {afterAll, beforeAll, describe, expect, test} from 'bun:test';
 import {PrismaPg} from '@prisma/adapter-pg';
 import {PrismaExtensionRedis} from '../../src';
 import {users} from '../data';
@@ -41,6 +41,11 @@ describe('Custom RedisApi adapter (client-agnostic end-to-end)', () => {
     await prisma.user.create({
       data: {id: userOne.id, name: userOne.name, email: userOne.email},
     });
+  });
+
+  afterAll(async () => {
+    fakeRedis.store.clear();
+    await prisma.user.deleteMany({});
   });
 
   test('auto-cache: miss then hit through the custom client', async () => {

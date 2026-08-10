@@ -1,4 +1,4 @@
-import {expect, test} from 'bun:test';
+import {beforeAll, expect, test} from 'bun:test';
 import {extendedPrismaWithStringAndAutoCacheTrue as extendedPrisma} from '../client';
 
 import {users} from '../data';
@@ -7,10 +7,15 @@ import {
   createManyUser,
   createUser,
   customFindUserByWhereUniqueInput,
+  deleteAllUsers,
   deleteAllUsersAndGetCountOfUsersWithoutCaching,
   deleteUserById,
   updateUserDetails,
 } from '../functions';
+
+beforeAll(async () => {
+  await deleteAllUsers(extendedPrisma);
+});
 
 test('User Creation: should create a new user', async () => {
   const userOne = users.find(user => user.id === 1);

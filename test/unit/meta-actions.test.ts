@@ -1,4 +1,4 @@
-import {expect, test} from 'bun:test';
+import {beforeAll, expect, test} from 'bun:test';
 import {
   extendedPrismaWithJsonAndAutoCacheTrue as extendedPrisma,
   extendedPrismaWithJsonAndCustomAutoCache as extendedPrismaCustom,
@@ -8,8 +8,13 @@ import {users} from '../data';
 import {
   createUser,
   delay,
+  deleteAllUsers,
   deleteAllUsersAndGetCountOfUsersWithoutCaching,
 } from '../functions';
+
+beforeAll(async () => {
+  await deleteAllUsers(extendedPrisma);
+});
 
 test('Meta actions on DB miss: recache and uncache functions', async () => {
   const userOne = users.find(u => u.id === 1);
