@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  pull_request:
 
 permissions:
   contents: write
@@ -15,10 +16,16 @@ concurrency:
 jobs:
   sync:
     name: sync bun.lock
+    # Dependabot cannot update bun.lock. Refreshing it on the PR branch keeps
+    # the merge commit self-consistent, so main never carries a stale lockfile
+    # that would break the frozen installs in publish and pages.
+    if: github.event_name == 'push' || github.actor == 'dependabot[bot]' || github.actor == 'yxx4c'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.head_ref }}
 
       - name: Set Up Bun Package Manager
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -36,5 +43,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add bun.lock
           git commit -m 'chore(deps): sync bun.lock [skip ci]'
-          git pull --rebase origin main
+          git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
           git push
